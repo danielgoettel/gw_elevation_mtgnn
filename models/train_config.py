@@ -37,9 +37,9 @@ def define_base_configuration():
         'learning_rate': 0.001,
         'num_epochs': 200,
         'batch_size': 32,
-        'F_w': 3,
+        'F_w': 1,
         'model_type': 'MTGNN',
-        'early_stopping_patience': 50,
+        'early_stopping_patience': 30,
         'min_delta': 0.001,
         'scheduler_patience': 10,
     }
