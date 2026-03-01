@@ -8,7 +8,6 @@ from torch.utils.data import DataLoader
 import json
 
 import sys
-sys.path.insert(0, 'C:\\codes\\wells_time\\scripts')
 
 from data_preprocessing import process_data 
 from data_preprocessing import gnn_data_prep 

@@ -11,7 +11,7 @@ import os
 import json
 import pandas as pd
 
-from config import SAVED_MODELS_DIR, TRAINING_RESULTS_DIR
+from config import BASE_PATH, SAVED_MODELS_DIR, TRAINING_RESULTS_DIR
 
 
 def prepare_combined_input(input_seq, external_forces, modeltype = 'MTGNN'):
@@ -217,7 +217,7 @@ from data_preprocessing.process_data import define_configuration
 def get_synthetic(series_names):
     config = define_configuration(True)
     
-    synthetic_data_path = Path('C:/codes/wells_time/data/simulated_data/results/timeseries/').absolute()
+    synthetic_data_path = (BASE_PATH / 'data' / 'simulated_data' / 'results' / 'timeseries').absolute()
     moria_results_overview_path = synthetic_data_path / 'moria_results_overview.csv'
     
     # Check if the moria_results_overview.csv file already exists

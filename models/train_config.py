@@ -23,7 +23,7 @@ def define_base_configuration():
         'propalpha': 0.07,
         'tanhalpha': 0.2,
         'layer_norm_affline': True,
-        'graph_type' :'rf',
+        'graph_type' :'default',
         'feature_importance_multiplier' : 1,
         'n_pumps_connected' : 4,
         'weight_mode': 'fixed',  # 'fixed' or 'variable'
