@@ -12,7 +12,8 @@ from pathlib import Path
 import random
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.impute import SimpleImputer
-from sklearn.metrics.pairwise import pairwise_distances  
+from sklearn.metrics.pairwise import pairwise_distances
+from data_preprocessing.pyg_graph import dense_adj_to_pyg, save_pyg_graph
 from datetime import datetime
 
 from config import (
@@ -996,7 +997,12 @@ def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, perce
     adj_matrix_tensor = torch.tensor(adj_matrix).float()
     static_features_tensor = static_features.clone().detach()
 
-    return adj_matrix_tensor, static_features_tensor
+    # Also produce PyG sparse graph format (edge_index, edge_type, edge_weight)
+    pyg_graph = dense_adj_to_pyg(adj_matrix, num_piezo, num_pump, num_prec, num_evap, num_river)
+    save_pyg_graph(pyg_graph, base_data_path / 'pyg_graph.pt')
+    print(f"PyG graph: {pyg_graph['edge_index'].shape[1]} edges, {pyg_graph['num_relations']} relation types")
+
+    return adj_matrix_tensor, static_features_tensor, pyg_graph
 
 if __name__ == "__main__":
     main()

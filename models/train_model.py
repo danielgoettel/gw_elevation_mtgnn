@@ -12,10 +12,10 @@ import json
 import itertools
 import sys
 
-from data_preprocessing import process_data 
-from data_preprocessing import gnn_data_prep 
-from models.mtgnn_lstm import MTGNN_LSTM
+from data_preprocessing import process_data
+from data_preprocessing import gnn_data_prep
 from models.mtgnn import MTGNN
+from models.multigraph_gnn import MultigraphGNN
 
 from models.lstm_model import LSTMModel
 from data_preprocessing.dataset import AutoregressiveTimeSeriesDataset
@@ -37,40 +37,88 @@ import datetime
 from functools import partial
 
 
-def create_mtgnn_model(num_features, num_nodes, seq_length, model_type, **kwargs):
-    """
-    Initialize the MTGNN model with the specified parameters.
-    """
-    # Extract MTGNN specific parameters from kwargs
+def create_model(num_features, num_nodes, seq_length, model_type, **kwargs):
+    """Factory function to create the appropriate model based on model_type."""
+    if model_type == 'MTGNN':
+        return _create_mtgnn(num_features, num_nodes, seq_length, **kwargs)
+    elif model_type == 'MultigraphGNN':
+        return _create_multigraph_gnn(num_nodes, seq_length, **kwargs)
+    elif model_type == 'LSTM':
+        return _create_lstm_model()
+    else:
+        raise ValueError(f"Unknown model_type: {model_type}")
+
+
+def _create_mtgnn(num_features, num_nodes, seq_length, **kwargs):
+    """Create MTGNN model."""
     mtgnn_params = {key: kwargs[key] for key in kwargs if key in {
         'gcn_true', 'build_adj', 'gcn_depth', 'kernel_set', 'kernel_size',
         'dropout', 'subgraph_size', 'node_dim', 'dilation_exponential',
         'conv_channels', 'residual_channels', 'skip_channels', 'end_channels',
-        'in_dim', 'out_dim', 'layers', 'propalpha', 'tanhalpha', 
+        'in_dim', 'out_dim', 'layers', 'propalpha', 'tanhalpha',
         'layer_norm_affline', 'xd'
     }}
     mtgnn_params['num_nodes'] = num_nodes
-    mtgnn_params['seq_length'] = seq_length + 1  # padding to match the external forces
+    mtgnn_params['seq_length'] = seq_length + 1
     mtgnn_params['in_dim'] = 1
     mtgnn_params['out_dim'] = 1
-    mtgnn_params['xd'] = num_features  # Assuming 'xd' is the number of static features
+    mtgnn_params['xd'] = num_features
+    return MTGNN(**mtgnn_params)
 
-    return MTGNN(**mtgnn_params) if model_type=='MTGNN' else MTGNN_LSTM(**mtgnn_params)
+
+def _create_multigraph_gnn(num_nodes, seq_length, **kwargs):
+    """Create MultigraphGNN model."""
+    return MultigraphGNN(
+        num_nodes=num_nodes,
+        num_relations=kwargs.get('num_relations', 5),
+        seq_length=seq_length + 1,
+        in_dim=1,
+        out_dim=1,
+        residual_channels=kwargs.get('residual_channels', 64),
+        conv_channels=kwargs.get('conv_channels', 64),
+        skip_channels=kwargs.get('skip_channels', 64),
+        end_channels=kwargs.get('end_channels', 128),
+        layers=kwargs.get('layers', 4),
+        kernel_set=kwargs.get('kernel_set', [1, 2]),
+        kernel_size=kwargs.get('kernel_size', 2),
+        dilation_exponential=kwargs.get('dilation_exponential', 2),
+        dropout=kwargs.get('dropout', 0.5),
+        layer_norm_affline=kwargs.get('layer_norm_affline', True),
+        rgcn_num_bases=kwargs.get('rgcn_num_bases', None),
+    )
 
 
-def create_lstm_model():
-    input_size = 219  
+def _create_lstm_model():
+    input_size = 219
     hidden_size = 150
-    output_size = 200  
+    output_size = 200
     external_forces_size = 19
     dense_output_size = 100
-
-    # Correct input size calculation
     return LSTMModel(input_size, hidden_size, output_size, external_forces_size, dense_output_size)
 
 
 
-def train(model, optimizer, loss_function, device, num_epochs, train_data, val_data, train_mask, val_mask, df_piezo_columns, num_piezo, static_features, A_tilde, F_w, W, config, model_type):
+def model_forward(model, combined_input, model_type, config, device,
+                   A_tilde=None, static_features=None,
+                   edge_index=None, edge_type=None, edge_weight=None,
+                   current_forces=None):
+    """Model-agnostic forward pass dispatcher."""
+    if model_type == 'MTGNN':
+        if config['build_adj']:
+            return model(combined_input, FE=static_features.to(device))
+        return model(combined_input, A_tilde.to(device), FE=static_features.to(device))
+    elif model_type == 'MultigraphGNN':
+        return model(combined_input, edge_index, edge_type, edge_weight)
+    elif model_type == 'LSTM':
+        return model(combined_input, current_forces)
+    else:
+        raise ValueError(f"Unknown model_type: {model_type}")
+
+
+def train(model, optimizer, loss_function, device, num_epochs, train_data, val_data,
+          train_mask, val_mask, df_piezo_columns, num_piezo, static_features, A_tilde,
+          F_w, W, config, model_type,
+          edge_index=None, edge_type=None, edge_weight=None):
     
     # Early stopping parameters
     early_stopping_patience = config.get('early_stopping_patience', 50)
@@ -168,15 +216,15 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
                       for t in range(future_window):
                           current_forces = external_forces_sequence[:, t : (W+t+1), :]
                           combined_input = prepare_combined_input(current_input, current_forces)
-          
-                          if model_type == 'MTGNN' or 'MTGNN_LSTM':
-                              output = model(combined_input, A_tilde.to(device), FE=static_features.to(device)) if not config['build_adj'] else model(combined_input, FE=static_features.to(device))
-                          elif model_type == 'LSTM' or 'tCNN':
-                              output = model(combined_input, current_forces)
-                          else:
-                              raise ValueError("Invalid model type. Choose 'MTGNN' or 'LSTM'.")
-          
-                          output = output[:, :, :num_piezo, 0] if model_type == 'MTGNN' or 'MTGNN_LSTM' else output
+
+                          output = model_forward(
+                              model, combined_input, model_type, config, device,
+                              A_tilde=A_tilde, static_features=static_features,
+                              edge_index=edge_index, edge_type=edge_type, edge_weight=edge_weight,
+                              current_forces=current_forces)
+
+                          if model_type in ('MTGNN', 'MultigraphGNN'):
+                              output = output[:, :, :num_piezo, 0]
                           predictions.append(output)
                           next_input = output
                           current_input = torch.cat((current_input[:, 1:, :], next_input), dim=1)
@@ -215,23 +263,21 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
 
                         with autocast(device_type = "cuda"):
                           predictions = []
-                          for t in range(future_window):  
+                          for t in range(future_window):
                               current_forces = external_forces_sequence[:, t : (W+t + 1), :]
                               combined_input = prepare_combined_input(current_input, current_forces)
-          
-                              if model_type == 'MTGNN' or 'MTGNN_LSTM':
-                                  output = model(combined_input, A_tilde.to(device), FE=static_features.to(device)) if not config['build_adj'] else model(combined_input, FE=static_features.to(device))
-                              elif model_type == 'LSTM' or 'tCNN':
-          
-                                  output = model(combined_input, current_forces)
-                              else:
-                                  raise ValueError("Invalid model type. Choose 'MTGNN' or 'LSTM'.")
-          
-                              output = output[:, :, :num_piezo, 0] if model_type == 'MTGNN' or 'MTGNN_LSTM' else output
+
+                              output = model_forward(
+                                  model, combined_input, model_type, config, device,
+                                  A_tilde=A_tilde, static_features=static_features,
+                                  edge_index=edge_index, edge_type=edge_type, edge_weight=edge_weight,
+                                  current_forces=current_forces)
+
+                              if model_type in ('MTGNN', 'MultigraphGNN'):
+                                  output = output[:, :, :num_piezo, 0]
                               predictions.append(output)
-                              
-                              # Update the input sequence for the next prediction
-                              next_input = output 
+
+                              next_input = output
                               current_input = torch.cat((current_input[:, 1:, :], next_input), dim=1)
           
                           predictions = torch.cat(predictions, dim=1)
@@ -434,7 +480,7 @@ def run_training_and_evaluation(config):
     # Assuming process_data.main() prepares and returns the necessary datasets and GNN data
     train_data, val_data, test_data, train_mask, val_mask, test_mask, df_piezo_columns, pump_columns, locations_no_missing, scaler = process_data.main(config['synthetic_data'])
     train_data.to_csv(RANDOM_FOREST_TRAINING_DATA)
-    A_tilde, static_features = gnn_data_prep.main(df_piezo_columns, pump_columns, locations_no_missing, config['graph_type'], config['percentage'] , config['n_piezo_connected'], config['feature_importance_multiplier'], config['n_pumps_connected'], config['weight_mode'], config['layer_constrain'], config['ext_data'], config['multiply_exo_weights'])
+    A_tilde, static_features, pyg_graph = gnn_data_prep.main(df_piezo_columns, pump_columns, locations_no_missing, config['graph_type'], config['percentage'] , config['n_piezo_connected'], config['feature_importance_multiplier'], config['n_pumps_connected'], config['weight_mode'], config['layer_constrain'], config['ext_data'], config['multiply_exo_weights'])
     
     ahm = plot_adj_heatmap(A_tilde)
      
@@ -450,15 +496,20 @@ def run_training_and_evaluation(config):
 
     F_w = config.get('F_w', 3)
     model_type = config.get('model_type', 'MTGNN')
-    if model_type=='MTGNN' or 'MTGNN_LSTM':
-        model = create_mtgnn_model(
-            num_features=num_features,
-            num_nodes=num_nodes,
-            seq_length=seq_length,
-            **config  # Unpacks and passes the configuration dictionary (includes model_type)
-        ).to(device)
-    else: 
-        model = create_lstm_model().to(device)
+    model = create_model(
+        num_features=num_features,
+        num_nodes=num_nodes,
+        seq_length=seq_length,
+        **config
+    ).to(device)
+
+    # Prepare PyG graph tensors for GPU if needed
+    if model_type == 'MultigraphGNN':
+        edge_index = pyg_graph['edge_index'].to(device)
+        edge_type = pyg_graph['edge_type'].to(device)
+        edge_weight = pyg_graph['edge_weight'].to(device)
+    else:
+        edge_index = edge_type = edge_weight = None
 
     for param in model.parameters():
         param.requires_grad = True
@@ -469,12 +520,18 @@ def run_training_and_evaluation(config):
     optimizer = optim.Adam(model.parameters(), lr=config.get('learning_rate', 0.001))
     loss_function = nn.MSELoss()
 
-    train(model, optimizer, loss_function, device, num_epochs=config.get('num_epochs', 200), train_data=train_data, val_data=val_data, train_mask=train_mask, val_mask=val_mask, df_piezo_columns=df_piezo_columns, num_piezo=num_piezo, static_features=static_features, A_tilde=A_tilde, F_w=F_w, W=W, config = config, model_type = model_type)
+    train(model, optimizer, loss_function, device, num_epochs=config.get('num_epochs', 200),
+          train_data=train_data, val_data=val_data, train_mask=train_mask, val_mask=val_mask,
+          df_piezo_columns=df_piezo_columns, num_piezo=num_piezo, static_features=static_features,
+          A_tilde=A_tilde, F_w=F_w, W=W, config=config, model_type=model_type,
+          edge_index=edge_index, edge_type=edge_type, edge_weight=edge_weight)
 
 
     # Selecting first samples from training and testing datasets
     test_sample = AutoregressiveTimeSeriesDataset(test_data, input_window=W, max_future_window=100, missing_data_mask = test_mask, num_piezo = num_piezo)[1]
-    test_input, test_predicted_model, test_target = make_predictions(model, test_sample, device, 100, W, A_tilde, static_features, num_piezo, modeltype=model_type)
+    test_input, test_predicted_model, test_target = make_predictions(
+        model, test_sample, device, 100, W, A_tilde, static_features, num_piezo,
+        modeltype=model_type, edge_index=edge_index, edge_type=edge_type, edge_weight=edge_weight)
         
     # Transform predictions back to original scale
 

@@ -14,7 +14,7 @@ import pandas as pd
 from config import BASE_PATH, SAVED_MODELS_DIR, TRAINING_RESULTS_DIR
 
 
-def prepare_combined_input(input_seq, external_forces, modeltype = 'MTGNN'):
+def prepare_combined_input(input_seq, external_forces, modeltype='MTGNN'):
     # Replicate the first time step of input_seq
     first_step_replicated = input_seq[:, 0, :].unsqueeze(1)
     input_seq_padded = torch.cat([first_step_replicated, input_seq], dim=1)
@@ -22,9 +22,8 @@ def prepare_combined_input(input_seq, external_forces, modeltype = 'MTGNN'):
     # Concatenate padded input sequence with external forces along the feature dimension
     combined_input = torch.cat([input_seq_padded, external_forces], dim=2)
 
-    if modeltype == 'MTGNN' or 'MTGNN_LSTM': 
-        # Reshape combined input to match the expected input format of MTGNN
-        # torch.Size([B, T, N]) --- > torch.Size([B, 1, N, T])
+    if modeltype in ('MTGNN', 'MultigraphGNN'):
+        # Reshape: (B, T, N) -> (B, 1, N, T)
         combined_input = combined_input.permute(0, 2, 1).unsqueeze(1)
     else:
         combined_input = combined_input.permute(0, 2, 1).unsqueeze(2)
@@ -33,7 +32,9 @@ def prepare_combined_input(input_seq, external_forces, modeltype = 'MTGNN'):
 
     return combined_input.to(device)
 
-def make_predictions(model, sample, device, F_w, W, A_tilde, static_features, num_piezo, build_adj=False, modeltype='MTGNN', perturb=False, noise_level=0.01):
+def make_predictions(model, sample, device, F_w, W, A_tilde, static_features, num_piezo,
+                     build_adj=False, modeltype='MTGNN', perturb=False, noise_level=0.01,
+                     edge_index=None, edge_type=None, edge_weight=None):
     input_sequence, external_forces, target_sequence, _ = sample
 
     # Move the data to the device (CPU or CUDA)
@@ -50,25 +51,26 @@ def make_predictions(model, sample, device, F_w, W, A_tilde, static_features, nu
     current_external_forces = external_forces.unsqueeze(0)  # Add batch dimension
 
     predictions = []
-    with torch.no_grad():  # Disable gradient computations
-        for t in range(F_w):  # Iterate for F future steps
+    with torch.no_grad():
+        for t in range(F_w):
             current_forces = current_external_forces[:, t : (W + t + 1), :]
-            # combined_input = prepare_combined_input(current_input, current_forces, modeltype)
             combined_input = prepare_combined_input(current_input, current_forces)
 
-            if modeltype == 'MTGNN' or 'MTGNN_LSTM':
+            if modeltype == 'MTGNN':
                 output = model(combined_input, A_tilde.to(device), FE=static_features.to(device)) if not build_adj else model(combined_input, FE=static_features.to(device))
                 output = output[:, :, :num_piezo, 0]
-            else: 
-                output = model(combined_input.to(device), current_forces.to(device)) 
+            elif modeltype == 'MultigraphGNN':
+                output = model(combined_input, edge_index, edge_type, edge_weight)
+                output = output[:, :, :num_piezo, 0]
+            else:
+                output = model(combined_input.to(device), current_forces.to(device))
 
             predictions.append(output)
-            next_input = output 
+            next_input = output
             current_input = torch.cat((current_input[:, 1:, :], next_input), dim=1)
 
-    predicted_sequence = torch.cat(predictions, dim=1).squeeze(0)  # Remove batch dimension
+    predicted_sequence = torch.cat(predictions, dim=1).squeeze(0)
 
-    # Move the predicted sequence back to CPU for further processing
     return input_sequence.cpu(), predicted_sequence.cpu(), target_sequence.cpu()
 
 

@@ -38,10 +38,14 @@ def define_base_configuration():
         'num_epochs': 200,
         'batch_size': 32,
         'F_w': 1,
-        'model_type': 'MTGNN',
+        'model_type': 'MTGNN',  # Options: 'MTGNN', 'MultigraphGNN', 'LSTM'
         'early_stopping_patience': 30,
         'min_delta': 0.001,
         'scheduler_patience': 10,
+
+        # MultigraphGNN parameters (only used when model_type='MultigraphGNN')
+        'num_relations': 5,
+        'rgcn_num_bases': None,  # basis decomposition (None = no decomposition)
     }
 
 # Define variations for each parameter (exclude 'in_dim' and 'out_dim')
