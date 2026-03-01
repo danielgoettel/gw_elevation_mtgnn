@@ -43,15 +43,11 @@ from utils.visualization import plot_two_random_columns
 
 def setup_environment():
     """
-    Setup the necessary environment, such as changing working directories and ensuring required folders exist.
+    Setup the necessary environment, ensuring required output folders exist.
     """
-    os.chdir(Path(__file__).parent.parent.parent)
-    print("Current working directory:", os.getcwd())  # Add this line
-
-    # path_images = Path('imgs/')
-    # path_images.mkdir(parents=True, exist_ok=True)
-    preprocessed = Path("scripts/data")
-    assert preprocessed.is_dir(), "Preprocessed data directory does not exist."
+    os.chdir(Path(__file__).parent.parent)
+    print("Current working directory:", os.getcwd())
+    PREPROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 
 def load_and_filter_series(aquifer=None):
     """
