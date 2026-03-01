@@ -116,7 +116,7 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
       
     
         # Model filename for the current future window
-        model_filename = generate_model_filename(model_type, future_window,**config)
+        model_filename = generate_model_filename(future_window=future_window, **config)
         # Remove the .pt extension from the model name for the losses
         model_name_for_losses = model_filename.split('/')[-1].replace('.pt', '')
 
@@ -486,7 +486,7 @@ def run_training_and_evaluation(config):
 
     test_rmse_mean, test_rmse_std = print_mean_std(test_rmse, "Test RMSE")
 
-    save_rmse_values(test_rmse, model_type, F_w,**config)
+    save_rmse_values(test_rmse, future_window=F_w, **config)
 
     # Plotting Model 1 Predictions
     _, _, _, mask_seq_test = test_sample

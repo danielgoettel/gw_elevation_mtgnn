@@ -143,8 +143,8 @@ def generate_model_filename(model_type, future_window, graph_type=None, **kwargs
     return os.path.join(str(SAVED_MODELS_DIR), f"{base_name}.pt")
 
 
-def save_rmse_values(test_rmse, model_type, future_window,**config):
-    model_base_name = generate_model_filename(model_type, future_window,**config)
+def save_rmse_values(test_rmse, future_window, **config):
+    model_base_name = generate_model_filename(future_window=future_window, **config)
     
     model_base_name = os.path.basename(model_base_name).replace('.pt', '')
 
