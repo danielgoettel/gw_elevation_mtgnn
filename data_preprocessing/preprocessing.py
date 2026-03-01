@@ -109,7 +109,10 @@ def select_nodes(complete_daily, n_nodes_selection):
 
 
 
-def resample_df(df_series, common_start_date, common_end_date, resampling_freq ):
+def resample_df(df_series, common_start_date, common_end_date, resampling_freq):
+    if resampling_freq is None:
+        # No resampling — just trim to date range
+        return df_series[(df_series.index >= common_start_date) & (df_series.index <= common_end_date)]
     df_series_2D = df_series.resample(resampling_freq, origin=common_start_date).mean()
     new_index = pd.date_range(start=common_start_date, end=common_end_date, freq=resampling_freq)
     df_series_2D = df_series_2D.reindex(new_index)

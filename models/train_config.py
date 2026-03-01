@@ -31,8 +31,17 @@ def define_base_configuration():
         'multiply_exo_weights' : False,
         'layer_constrain' : False,
         'perturb_weights' : False,
-        'exclude_evap_precip' : "Garg"
+        'exclude_evap_precip' : "Garg",
 
+        # Training parameters
+        'learning_rate': 0.001,
+        'num_epochs': 200,
+        'batch_size': 32,
+        'F_w': 3,
+        'model_type': 'MTGNN',
+        'early_stopping_patience': 50,
+        'min_delta': 0.001,
+        'scheduler_patience': 10,
     }
 
 # Define variations for each parameter (exclude 'in_dim' and 'out_dim')

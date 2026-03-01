@@ -73,7 +73,8 @@ def process_series(series_names, start_year=2004, resampling_freq='W'):
             df_series = piezometer_measurements(series_name)
             if df_series is not None:
                 df_series = df_series.groupby('date').agg({'HEAD': 'mean'})
-                df_series = df_series.resample(resampling_freq).mean()
+                if resampling_freq is not None:
+                    df_series = df_series.resample(resampling_freq).mean()
                 dfs.append(df_series.rename(columns={'HEAD': series_name}))
         except FileNotFoundError as e:
             print(f"Error processing series {series_name}")
@@ -251,7 +252,10 @@ def process_synthetic_data(synthetic_data_path, real_data_path, series_names, co
 
     common_start_date = pd.Timestamp(config.get('common_start_date', '2008-01-01'))
     df_piezo_moria_unique_cols.index = pd.to_datetime(df_piezo_moria_unique_cols.index)
-    resampled_df = df_piezo_moria_unique_cols.resample(config['resampling_freq'], origin=common_start_date).mean()
+    if config['resampling_freq'] is not None:
+        resampled_df = df_piezo_moria_unique_cols.resample(config['resampling_freq'], origin=common_start_date).mean()
+    else:
+        resampled_df = df_piezo_moria_unique_cols[df_piezo_moria_unique_cols.index >= common_start_date]
 
     missing_data_mask = ~resampled_df.isna()
     return resampled_df, missing_data_mask

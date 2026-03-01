@@ -11,6 +11,8 @@ import os
 import json
 import pandas as pd
 
+from config import SAVED_MODELS_DIR, TRAINING_RESULTS_DIR
+
 
 def prepare_combined_input(input_seq, external_forces, modeltype = 'MTGNN'):
     # Replicate the first time step of input_seq
@@ -138,7 +140,7 @@ def generate_model_filename(model_type, future_window, graph_type=None, **kwargs
     if kwargs['exclude_evap_precip'] == True:  #TODO change all like this.  
         base_name += "_exclude_evap_precip"
 
-    return os.path.join("saved_models", f"{base_name}.pt")
+    return os.path.join(str(SAVED_MODELS_DIR), f"{base_name}.pt")
 
 
 def save_rmse_values(test_rmse, model_type, future_window,**config):
@@ -146,9 +148,9 @@ def save_rmse_values(test_rmse, model_type, future_window,**config):
     
     model_base_name = os.path.basename(model_base_name).replace('.pt', '')
 
-    os.makedirs("training_results", exist_ok=True)
+    os.makedirs(str(TRAINING_RESULTS_DIR), exist_ok=True)
     rmse_filename = f"{model_base_name}_rmse_test.json"
-    rmse_filepath = os.path.join("training_results", rmse_filename)
+    rmse_filepath = os.path.join(str(TRAINING_RESULTS_DIR), rmse_filename)
 
     # Convert test_rmse to a list if it's not already one (e.g., if it's a numpy array)
     test_rmse_list = test_rmse if isinstance(test_rmse, list) else test_rmse.tolist()
@@ -236,8 +238,11 @@ def get_synthetic(series_names):
     df_piezo_moria_unique_cols = df_piezo_moria_selected.loc[:, ~df_piezo_moria_selected.columns.duplicated(keep='first')]
     
     df_piezo_moria_unique_cols.index = pd.to_datetime(df_piezo_moria_unique_cols.index)
-    resampled_df = df_piezo_moria_unique_cols.resample(config['resampling_freq']).mean()
-    
+    if config['resampling_freq'] is not None:
+        resampled_df = df_piezo_moria_unique_cols.resample(config['resampling_freq']).mean()
+    else:
+        resampled_df = df_piezo_moria_unique_cols.copy()
+
     resampled_df = resampled_df[resampled_df.index >= pd.Timestamp('2018-04-01')]
 
     # Only select the first 100 rows of resampled_df

@@ -5,16 +5,21 @@ import os
 
 # Automatically detect if running in Colab
 IN_COLAB = "COLAB_GPU" in os.environ
-if IN_COLAB:
-    BASE_PATH = Path("/content/drive/MyDrive/Environmental_DL_Project/GroundwaterFlowGNN-main")
-else:
-    BASE_PATH = Path(__file__).resolve().parent
+# BASE_PATH always resolves to the project root (utils/ -> parent)
+BASE_PATH = Path(__file__).resolve().parent.parent
 
-# Directories
+# Experiment tag — change this to write outputs to new folders
+EXPERIMENT = "Independent_Study"
+
+# Directories — inputs (shared across experiments)
 DATA_DIR = BASE_PATH / "data"
 INPUT_DIR = DATA_DIR / "input"
-PREPROCESSED_DIR = DATA_DIR / "preprocessed"
 PIEZO_CSV_DIR = INPUT_DIR / "piezometers/csv/csv"
+
+# Directories — outputs (experiment-specific)
+PREPROCESSED_DIR = DATA_DIR / f"preprocessed_{EXPERIMENT}"
+SAVED_MODELS_DIR = BASE_PATH / f"saved_models_{EXPERIMENT}"
+TRAINING_RESULTS_DIR = BASE_PATH / f"training_results_{EXPERIMENT}"
 
 # Metadata files
 PIEZO_METADATA = INPUT_DIR / "piezometers/piezometer_metadata.csv" #validated

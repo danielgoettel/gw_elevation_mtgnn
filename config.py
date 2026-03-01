@@ -5,20 +5,25 @@ import os
 
 # Automatically detect if running in Colab
 IN_COLAB = "COLAB_GPU" in os.environ
-if IN_COLAB:
-    BASE_PATH = Path("/content/drive/MyDrive/Environmental_DL_Project/GroundwaterFlowGNN-main")
-else:
-    BASE_PATH = Path(__file__).resolve().parent
+# BASE_PATH always resolves to the project root (where this config.py lives)
+BASE_PATH = Path(__file__).resolve().parent
 
-# Directories
+# Experiment tag — change this to write outputs to new folders
+EXPERIMENT = "Independent_Study"
+
+# Directories — inputs (shared across experiments)
 DATA_DIR = BASE_PATH / "data"
 INPUT_DIR = DATA_DIR / "input"
-PREPROCESSED_DIR = DATA_DIR / "preprocessed"
 PIEZO_CSV_DIR = INPUT_DIR / "piezometers/csv/csv"
-GENERATED_GRAPHS = BASE_PATH / "generated_graphs"
-SCATTER_PLOTS = BASE_PATH / "scatterplots"
-TRAINING_SUMMARIES = BASE_PATH / "training_results/Summaries"
-RUN_PLOTS_AND_RESULTS = BASE_PATH / "training_results/Individual_Run_Results"
+
+# Directories — outputs (experiment-specific)
+PREPROCESSED_DIR = DATA_DIR / f"preprocessed_{EXPERIMENT}"
+GENERATED_GRAPHS = BASE_PATH / f"generated_graphs_{EXPERIMENT}"
+SCATTER_PLOTS = BASE_PATH / f"scatterplots_{EXPERIMENT}"
+SAVED_MODELS_DIR = BASE_PATH / f"saved_models_{EXPERIMENT}"
+TRAINING_RESULTS_DIR = BASE_PATH / f"training_results_{EXPERIMENT}"
+TRAINING_SUMMARIES = TRAINING_RESULTS_DIR / "Summaries"
+RUN_PLOTS_AND_RESULTS = TRAINING_RESULTS_DIR / "Individual_Run_Results"
 
 #JSON FILE PATH
 

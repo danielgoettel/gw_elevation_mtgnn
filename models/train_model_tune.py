@@ -22,7 +22,7 @@ from utils.visualization import plot_sequences, plot_sparsity_pattern
 import time
 import datetime
 
-from config import PIEZO_LAYER_INFORMATION, TRAINING_SUMMARIES
+from config import PIEZO_LAYER_INFORMATION, TRAINING_SUMMARIES, SAVED_MODELS_DIR, TRAINING_RESULTS_DIR
 
 
 from functools import partial
@@ -56,15 +56,15 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
     model_type = 'MTGNN'
     
     # Early stopping parameters
-    early_stopping_patience = 50
-    min_delta = 0.001
+    early_stopping_patience = config.get('early_stopping_patience', 50)
+    min_delta = config.get('min_delta', 0.001)
     best_loss = float('inf')
-            
+
     # Learning rate scheduler setup
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=10)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=config.get('scheduler_patience', 10))
     
     # Create a directory for saving models if it doesn't exist
-    os.makedirs("saved_models", exist_ok=True)
+    os.makedirs(str(SAVED_MODELS_DIR), exist_ok=True)
     os.makedirs("failed_runs", exist_ok=True)  # Ensure the directory exists
     failed_runs_filepath = "failed_runs/failed_models.txt"
 
@@ -107,11 +107,12 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
     
         # start_time_loading_train_dataset = time.time()
 
+        batch_size = config.get('batch_size', 32)
         train_dataset = AutoregressiveTimeSeriesDataset(train_data, W, future_window, train_mask, num_piezo)
-        train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-        
-        eval_dataset = AutoregressiveTimeSeriesDataset(val_data, W, future_window, val_mask, num_piezo)  
-        eval_loader = DataLoader(eval_dataset, batch_size=32, shuffle=False)
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+
+        eval_dataset = AutoregressiveTimeSeriesDataset(val_data, W, future_window, val_mask, num_piezo)
+        eval_loader = DataLoader(eval_dataset, batch_size=batch_size, shuffle=False)
         # end_time_loading_train_dataset = time.time()
         # print(f"Loading training and eval dataset took {end_time_loading_train_dataset - start_time_loading_train_dataset:.2f} seconds")
             
@@ -247,9 +248,9 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
         
             # Now you can use model_name_for_losses for naming your loss files
             loss_filename = f'losses_{model_name_for_losses}.json'
-            os.makedirs("training_results", exist_ok=True)
-    
-            loss_filename_filepath = os.path.join("training_results", loss_filename)
+            os.makedirs(str(TRAINING_RESULTS_DIR), exist_ok=True)
+
+            loss_filename_filepath = os.path.join(str(TRAINING_RESULTS_DIR), loss_filename)
             with open(loss_filename_filepath, 'w') as f:
                 json.dump(losses_dict, f, indent=4)
                 
@@ -296,7 +297,17 @@ def define_configuration():
         'tanhalpha': 0.2,
         'layer_norm_affline': True,
         'graph_type' : 'geolayer',
-        'feature_importance_multiplier' : 1
+        'feature_importance_multiplier' : 1,
+
+        # Training parameters
+        'learning_rate': 0.001,
+        'num_epochs': 200,
+        'batch_size': 32,
+        'F_w': 1,
+        'model_type': 'MTGNN',
+        'early_stopping_patience': 50,
+        'min_delta': 0.001,
+        'scheduler_patience': 10,
     }
  
 
@@ -349,9 +360,7 @@ def main():
     
     # Specify the sequence length (W) and future window size
     W = config['W']
-    F_w = 1  # maximum future window size
-
-    # model = create_mtgnn_model(num_features, A_tilde.shape[0], W ).to(device)  
+    F_w = config.get('F_w', 1)
 
     model = create_mtgnn_model(
         num_features=num_features, 
@@ -361,10 +370,10 @@ def main():
     ).to(device)
     
 
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    optimizer = optim.Adam(model.parameters(), lr=config.get('learning_rate', 0.001))
     loss_function = nn.MSELoss()
 
-    train(model, optimizer, loss_function, device, num_epochs=2, train_data=train_data, val_data=val_data, train_mask=train_mask, val_mask=val_mask, df_piezo_columns=df_piezo_columns, num_piezo=num_piezo, static_features=static_features, A_tilde=A_tilde, F_w=F_w, W=W, config = config)
+    train(model, optimizer, loss_function, device, num_epochs=config.get('num_epochs', 200), train_data=train_data, val_data=val_data, train_mask=train_mask, val_mask=val_mask, df_piezo_columns=df_piezo_columns, num_piezo=num_piezo, static_features=static_features, A_tilde=A_tilde, F_w=F_w, W=W, config = config)
 
 
     # Selecting first samples from training and testing datasets
@@ -452,7 +461,7 @@ def train_tune(config):
     num_piezo = len(df_piezo_columns)
     num_features = static_features.shape[1]
     W = config['W']
-    F_w = 1
+    F_w = config.get('F_w', 1)
 
     # 2) Build model, optimizer, loss
     model = create_mtgnn_model(

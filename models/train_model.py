@@ -25,7 +25,7 @@ from utils.training_utils import prepare_combined_input, make_predictions, inver
 from utils.metrics import calculate_rmse_per_piezometer, calculate_rmse_per_piezometer_moria, print_mean_std
 from utils.visualization import plot_sequences, plot_sparsity_pattern, plot_comparison_sequence, plot_comparison_sequence_dual_y, plot_rmse_comparison, plot_rmse_3d_network, plot_adj_heatmap
 
-from config import PIEZO_LAYER_INFORMATION, RANDOM_FOREST_TRAINING_DATA, SCATTER_PLOTS, TRAINING_SUMMARIES
+from config import PIEZO_LAYER_INFORMATION, RANDOM_FOREST_TRAINING_DATA, SCATTER_PLOTS, TRAINING_SUMMARIES, SAVED_MODELS_DIR, TRAINING_RESULTS_DIR
 
 from train_config import define_base_configuration, parameter_variations
 
@@ -74,15 +74,15 @@ def create_lstm_model():
 def train(model, optimizer, loss_function, device, num_epochs, train_data, val_data, train_mask, val_mask, df_piezo_columns, num_piezo, static_features, A_tilde, F_w, W, config, model_type):
     
     # Early stopping parameters
-    early_stopping_patience = 50
-    min_delta = 0.001
+    early_stopping_patience = config.get('early_stopping_patience', 50)
+    min_delta = config.get('min_delta', 0.001)
     best_loss = float('inf')
-            
+
     # Learning rate scheduler setup
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=10)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=config.get('scheduler_patience', 10))
     
     # Create a directory for saving models if it doesn't exist
-    os.makedirs("saved_models", exist_ok=True)
+    os.makedirs(str(SAVED_MODELS_DIR), exist_ok=True)
     os.makedirs("failed_runs", exist_ok=True)  # Ensure the directory exists
     failed_runs_filepath = "failed_runs/failed_models.txt"
 
@@ -127,11 +127,12 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
     
         # start_time_loading_train_dataset = time.time()
 
+        batch_size = config.get('batch_size', 32)
         train_dataset = AutoregressiveTimeSeriesDataset(train_data, W, future_window, train_mask, num_piezo)
-        train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-        
-        eval_dataset = AutoregressiveTimeSeriesDataset(val_data, W, future_window, val_mask, num_piezo)  
-        eval_loader = DataLoader(eval_dataset, batch_size=32, shuffle=False)
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+
+        eval_dataset = AutoregressiveTimeSeriesDataset(val_data, W, future_window, val_mask, num_piezo)
+        eval_loader = DataLoader(eval_dataset, batch_size=batch_size, shuffle=False)
         # end_time_loading_train_dataset = time.time()
         # print(f"Loading training and eval dataset took {end_time_loading_train_dataset - start_time_loading_train_dataset:.2f} seconds")
             
@@ -282,9 +283,9 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
         
             # Now you can use model_name_for_losses for naming your loss files
             loss_filename = f'losses_{model_name_for_losses}.json'
-            os.makedirs("training_results", exist_ok=True)
-    
-            loss_filename_filepath = os.path.join("training_results", loss_filename)
+            os.makedirs(str(TRAINING_RESULTS_DIR), exist_ok=True)
+
+            loss_filename_filepath = os.path.join(str(TRAINING_RESULTS_DIR), loss_filename)
             with open(loss_filename_filepath, 'w') as f:
                 json.dump(losses_dict, f, indent=4)
                 
@@ -444,10 +445,8 @@ def run_training_and_evaluation(config):
     # Specify the sequence length (W) and future window size
     W = config['W']
 
-    # for F_w in range(1,12): 
-    F_w = 3 # maximum future window size
-
-    model_type = 'MTGNN'
+    F_w = config.get('F_w', 3)
+    model_type = config.get('model_type', 'MTGNN')
     if model_type=='MTGNN' or 'MTGNN_LSTM':
         model = create_mtgnn_model(
             num_features=num_features, 
@@ -465,10 +464,10 @@ def run_training_and_evaluation(config):
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Total number of parameters: {total_params}")
 
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    optimizer = optim.Adam(model.parameters(), lr=config.get('learning_rate', 0.001))
     loss_function = nn.MSELoss()
 
-    train(model, optimizer, loss_function, device, num_epochs=200, train_data=train_data, val_data=val_data, train_mask=train_mask, val_mask=val_mask, df_piezo_columns=df_piezo_columns, num_piezo=num_piezo, static_features=static_features, A_tilde=A_tilde, F_w=F_w, W=W, config = config, model_type = model_type)
+    train(model, optimizer, loss_function, device, num_epochs=config.get('num_epochs', 200), train_data=train_data, val_data=val_data, train_mask=train_mask, val_mask=val_mask, df_piezo_columns=df_piezo_columns, num_piezo=num_piezo, static_features=static_features, A_tilde=A_tilde, F_w=F_w, W=W, config = config, model_type = model_type)
 
 
     # Selecting first samples from training and testing datasets
