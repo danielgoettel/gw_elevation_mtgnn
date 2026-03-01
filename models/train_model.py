@@ -453,11 +453,10 @@ def run_training_and_evaluation(config):
     model_type = config.get('model_type', 'MTGNN')
     if model_type=='MTGNN' or 'MTGNN_LSTM':
         model = create_mtgnn_model(
-            num_features=num_features, 
-            num_nodes=num_nodes, 
+            num_features=num_features,
+            num_nodes=num_nodes,
             seq_length=seq_length,
-            model_type=model_type,
-            **config  # Unpacks and passes the configuration dictionary
+            **config  # Unpacks and passes the configuration dictionary (includes model_type)
         ).to(device)
     else: 
         model = create_lstm_model().to(device)
