@@ -115,6 +115,48 @@ def model_forward(model, combined_input, model_type, config, device,
         raise ValueError(f"Unknown model_type: {model_type}")
 
 
+def compute_val_rmse_per_node(model, eval_loader, device, future_window, W,
+                              model_type, config, A_tilde, static_features,
+                              num_piezo, edge_index, edge_type, edge_weight):
+    """Compute per-node RMSE from validation batches (on scaled data)."""
+    model.eval()
+    node_squared_errors = np.zeros(num_piezo)
+    node_counts = np.zeros(num_piezo)
+
+    with torch.no_grad():
+        for input_sequence, external_forces_sequence, target_sequence, mask_sequence in eval_loader:
+            input_sequence = input_sequence.to(device)
+            external_forces_sequence = external_forces_sequence.to(device)
+            target_sequence = target_sequence.to(device)
+            mask_sequence = mask_sequence.to(device)
+
+            current_input = input_sequence
+            with autocast(device_type="cuda"):
+                predictions = []
+                for t in range(future_window):
+                    current_forces = external_forces_sequence[:, t:(W + t + 1), :]
+                    combined_input = prepare_combined_input(current_input, current_forces)
+                    output = model_forward(
+                        model, combined_input, model_type, config, device,
+                        A_tilde=A_tilde, static_features=static_features,
+                        edge_index=edge_index, edge_type=edge_type, edge_weight=edge_weight,
+                        current_forces=current_forces)
+                    if model_type in ('MTGNN', 'MultigraphGNN'):
+                        output = output[:, :, :num_piezo, 0]
+                    predictions.append(output)
+                    current_input = torch.cat((current_input[:, 1:, :], output), dim=1)
+                predictions = torch.cat(predictions, dim=1)
+
+            # Per-node squared error, respecting the missing-data mask
+            sq_err = ((predictions - target_sequence) ** 2 * mask_sequence).cpu().numpy()
+            mask_np = mask_sequence.cpu().numpy()
+            # Sum across batch and time dimensions, per node
+            node_squared_errors += sq_err.sum(axis=(0, 1))[:num_piezo]
+            node_counts += mask_np.sum(axis=(0, 1))[:num_piezo]
+
+    return np.sqrt(node_squared_errors / np.maximum(node_counts, 1))
+
+
 def train(model, optimizer, loss_function, device, num_epochs, train_data, val_data,
           train_mask, val_mask, df_piezo_columns, num_piezo, static_features, A_tilde,
           F_w, W, config, model_type,
@@ -124,6 +166,10 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
     early_stopping_patience = config.get('early_stopping_patience', 50)
     min_delta = config.get('min_delta', 0.001)
     best_loss = float('inf')
+
+    # Node dropout state
+    node_mask = None  # None = all nodes active; tensor of 1s/0s when dropout applied
+    dropped_node_names = []
 
     # Learning rate scheduler setup
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=config.get('scheduler_patience', 10))
@@ -231,12 +277,17 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
           
                       # Multi-Step loss
                       predictions = torch.cat(predictions, dim=1)
-                      
+
+                      # Apply node dropout mask (zero out dropped nodes' loss)
+                      if node_mask is not None:
+                          nm = node_mask.unsqueeze(0).unsqueeze(0)
+                          predictions = predictions * nm
+                          target_sequence = target_sequence * nm
+
                       predictions_masked = predictions * mask_sequence
                       target_masked = target_sequence * mask_sequence
                       loss = loss_function(predictions_masked, target_masked)
-        
-                    # loss = loss_function(predictions, target_sequence)
+
                     scaler.scale(loss).backward()
                     scaler.step(optimizer)
                     scaler.update()
@@ -281,11 +332,16 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
                               current_input = torch.cat((current_input[:, 1:, :], next_input), dim=1)
           
                           predictions = torch.cat(predictions, dim=1)
-          
+
+                          # Apply node dropout mask
+                          if node_mask is not None:
+                              nm = node_mask.unsqueeze(0).unsqueeze(0)
+                              predictions = predictions * nm
+                              target_sequence = target_sequence * nm
+
                           predictions_masked = predictions * mask_sequence
                           target_masked = target_sequence * mask_sequence
                           loss = loss_function(predictions_masked, target_masked)
-                          # loss = loss_function(predictions, target_sequence)
                           total_eval_loss += loss.item()
           
                 torch.cuda.empty_cache()  # Be cautious with frequent use
@@ -299,9 +355,50 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
                 if epoch % 10 == 9:
                     print(f"Epoch {epoch + 1}, Train Loss: {train_loss:.2e}, Eval Loss: {eval_loss:.2e}")
         
+                # Dynamic node dropout — evaluate and mask after warmup epoch
+                if (config.get('node_dropout') and node_mask is None
+                        and epoch + 1 == config.get('node_dropout_warmup', 60)):
+                    per_node_rmse = compute_val_rmse_per_node(
+                        model, eval_loader, device, future_window, W,
+                        model_type, config, A_tilde, static_features,
+                        num_piezo, edge_index, edge_type, edge_weight)
+                    mean_rmse = per_node_rmse.mean()
+                    std_rmse = per_node_rmse.std()
+                    threshold = mean_rmse + config.get('node_dropout_sd_threshold', 3.0) * std_rmse
+                    dropped_indices = np.where(per_node_rmse > threshold)[0]
+
+                    if len(dropped_indices) > 0:
+                        node_mask = torch.ones(num_piezo, device=device)
+                        node_mask[dropped_indices] = 0.0
+                        dropped_node_names = [df_piezo_columns[i] for i in dropped_indices]
+
+                        # Edge masking — zero out adjacency rows/cols for MTGNN
+                        if A_tilde is not None:
+                            full_mask = torch.ones(A_tilde.shape[0], device=A_tilde.device)
+                            full_mask[:num_piezo] = node_mask.to(A_tilde.device)
+                            A_tilde = A_tilde * full_mask.unsqueeze(0) * full_mask.unsqueeze(1)
+
+                        # Edge masking — filter edges for MultigraphGNN
+                        if edge_index is not None:
+                            src_is_dropped = torch.zeros(edge_index.shape[1], dtype=torch.bool, device=edge_index.device)
+                            dst_is_dropped = torch.zeros(edge_index.shape[1], dtype=torch.bool, device=edge_index.device)
+                            for idx in dropped_indices:
+                                src_is_dropped |= (edge_index[0] == idx)
+                                dst_is_dropped |= (edge_index[1] == idx)
+                            keep_edges = ~(src_is_dropped | dst_is_dropped)
+                            edge_index = edge_index[:, keep_edges]
+                            edge_type = edge_type[keep_edges]
+                            if edge_weight is not None:
+                                edge_weight = edge_weight[keep_edges]
+
+                        print(f"Node dropout at epoch {epoch + 1}: {len(dropped_indices)} nodes dropped (threshold={threshold:.4f})")
+                        print(f"  Dropped nodes: {dropped_node_names}")
+                    else:
+                        print(f"Node dropout at epoch {epoch + 1}: no outlier nodes found (threshold={threshold:.4f})")
+
                 # Adaptive Learning Rate
                 scheduler.step(eval_loss)
-        
+
                 # Early Stopping Check
                 if eval_loss + min_delta < best_loss:
                     best_loss = eval_loss
@@ -347,9 +444,11 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
                 print(f"Out of memory when processing {model_filename}.")
                 with open(failed_runs_filepath, "a") as file:
                     file.write(f"{model_filename}\n")
-                return None  # Exit the training function early
+                return dropped_node_names
             else:
                 raise  # Re-raise the exception if it's not a memory error
+
+    return dropped_node_names
 
 
 """
@@ -433,18 +532,23 @@ def main(run_all=True):
         else:
             print(f"Running base configuration {i} of {total_runs}")
         
-        test_rmse_mean, test_rmse_std, geolayer_summary = run_training_and_evaluation(config)
-        
+        test_rmse_mean, test_rmse_std, geolayer_summary, dropped_node_names = run_training_and_evaluation(config)
+
         row = {
+            "Timestamp":                datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "Model Type":               config["model_type"],
             "Graph Type":               config["graph_type"],
             "Percentage":               config["percentage"],
             "Piezometer Connections":   config["n_piezo_connected"],
             "Pump Connections":         config["n_pumps_connected"],
-            'FIM' :                     config["feature_importance_multiplier"],  
+            'FIM':                      config["feature_importance_multiplier"],
             'Weight Mode':              config['weight_mode'],
-            'Same Layer':               config['layer_constrain' ],
-            #'Penalties':                config['same_layer_kwargs'],
-            'Multiply_Exo_Weights':     config['multiply_exo_weights'],  
+            'Same Layer':               config['layer_constrain'],
+            'Multiply_Exo_Weights':     config['multiply_exo_weights'],
+            "W":                        config['W'],
+            "F_w":                      config['F_w'],
+            "Node Dropout":             config.get('node_dropout', False),
+            "Dropped Nodes":            ", ".join(dropped_node_names) if dropped_node_names else "",
             "Overall RMSE Mean":        test_rmse_mean,
             "Overall RMSE StdDev":      test_rmse_std,
         }
@@ -463,12 +567,21 @@ def main(run_all=True):
     df_summary = pd.DataFrame(summaries)
 
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    out_fname = f"summary_{ts}.csv"
-    df_summary.to_csv(TRAINING_SUMMARIES / f"summary_{ts}.csv" , index=False)
-    print(f"→ Wrote summary to {out_fname}")
-    
+    os.makedirs(str(TRAINING_SUMMARIES), exist_ok=True)
+    df_summary.to_csv(TRAINING_SUMMARIES / f"summary_{ts}.csv", index=False)
+    print(f"→ Wrote run summary to summary_{ts}.csv")
+
+    # Append to persistent overall results table
+    overall_path = TRAINING_SUMMARIES / "overall_results.csv"
+    if overall_path.exists():
+        df_existing = pd.read_csv(overall_path)
+        df_combined = pd.concat([df_existing, df_summary], ignore_index=True)
+    else:
+        df_combined = df_summary
+    df_combined.to_csv(overall_path, index=False)
+    print(f"→ Updated overall results ({len(df_combined)} total rows) at {overall_path}")
+
     if run_all:
-        # After all configurations have been tested, analyze the results
         analyze_results()
 
 
@@ -520,11 +633,13 @@ def run_training_and_evaluation(config):
     optimizer = optim.Adam(model.parameters(), lr=config.get('learning_rate', 0.001))
     loss_function = nn.MSELoss()
 
-    train(model, optimizer, loss_function, device, num_epochs=config.get('num_epochs', 200),
+    dropped_node_names = train(model, optimizer, loss_function, device, num_epochs=config.get('num_epochs', 200),
           train_data=train_data, val_data=val_data, train_mask=train_mask, val_mask=val_mask,
           df_piezo_columns=df_piezo_columns, num_piezo=num_piezo, static_features=static_features,
           A_tilde=A_tilde, F_w=F_w, W=W, config=config, model_type=model_type,
           edge_index=edge_index, edge_type=edge_type, edge_weight=edge_weight)
+    if dropped_node_names is None:
+        dropped_node_names = []
 
 
     # Selecting first samples from training and testing datasets
@@ -596,7 +711,7 @@ def run_training_and_evaluation(config):
     print("\n📊 RMSE Summary by Geolayer:")
     print(geolayer_summary.to_string(index=False))
 
-    return test_rmse_mean, test_rmse_std, geolayer_summary
+    return test_rmse_mean, test_rmse_std, geolayer_summary, dropped_node_names
 
 if __name__ == "__main__":
     main(run_all=False) # for running only the base configuration

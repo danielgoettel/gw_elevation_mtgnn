@@ -139,8 +139,11 @@ def generate_model_filename(model_type, future_window, graph_type=None, **kwargs
     if kwargs['perturb_weights'] == True:
         base_name += "_perturb_weights"
 
-    if kwargs['exclude_evap_precip'] == True:  #TODO change all like this.  
+    if kwargs['exclude_evap_precip'] == True:  #TODO change all like this.
         base_name += "_exclude_evap_precip"
+
+    if kwargs.get('node_dropout'):
+        base_name += "_node_dropout"
 
     return os.path.join(str(SAVED_MODELS_DIR), f"{base_name}.pt")
 

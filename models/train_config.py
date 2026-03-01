@@ -46,6 +46,11 @@ def define_base_configuration():
         # MultigraphGNN parameters (only used when model_type='MultigraphGNN')
         'num_relations': 5,
         'rgcn_num_bases': None,  # basis decomposition (None = no decomposition)
+
+        # Dynamic node dropout — isolate high-RMSE nodes mid-training
+        'node_dropout': False,
+        'node_dropout_warmup': 60,          # epochs before evaluating for dropout
+        'node_dropout_sd_threshold': 3.0,   # drop nodes with RMSE > mean + threshold * SD
     }
 
 # Define variations for each parameter (exclude 'in_dim' and 'out_dim')

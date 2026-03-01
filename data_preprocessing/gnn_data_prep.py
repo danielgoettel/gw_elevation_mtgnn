@@ -944,9 +944,19 @@ def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, perce
     # Prepare static features
     static_features = create_static_features(all_x, all_y, all_z, all_type)
 
+    # Build node type labels from index ranges
+    type_map = {1: 'Piezometer', 2: 'Pump', 3: 'Precipitation', 4: 'Evaporation', 5: 'River'}
+    type_labels = [type_map[int(t)] for t in all_type]
+
     # build a DataFrame and export
-    pd.DataFrame({"name": node_names, "x":all_x, "y": all_y, "z":all_z }) \
-      .to_csv(outdir / "nodes.csv", index=False)
+    nodes_df = pd.DataFrame({"name": node_names, "x": all_x, "y": all_y, "z": all_z, "Type": type_labels})
+
+    # Merge geolayer/regis_layer info for piezometers if available
+    if Path(PIEZO_LAYER_INFORMATION).exists():
+        layer_df = pd.read_csv(PIEZO_LAYER_INFORMATION)[['name', 'geolayer', 'regis_layer']].drop_duplicates(subset='name')
+        nodes_df = nodes_df.merge(layer_df, on='name', how='left')
+
+    nodes_df.to_csv(outdir / "nodes.csv", index=False)
 
     print(f"Wrote {len(node_names)} names to {outdir/'node_names.csv'}")
 

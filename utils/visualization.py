@@ -422,9 +422,24 @@ def plot_rmse_3d_network(
     A = raw_A.cpu().numpy() if isinstance(raw_A, torch.Tensor) else np.array(raw_A)
 
     # 2) Load nodes & merge RMSE
-    nodes = pd.read_csv(Path(PREPROCESSED_DIR)/"nodes_complete.csv")
+    nodes_path = Path(PREPROCESSED_DIR) / "nodes_complete.csv"
+    if not nodes_path.exists():
+        nodes_path = Path(PREPROCESSED_DIR) / "nodes.csv"
+    nodes = pd.read_csv(nodes_path)
+
+    # Only keep color_columns that actually exist in the data
+    color_columns = [c for c in color_columns if c in nodes.columns]
+    if not color_columns and 'Type' in nodes.columns:
+        color_columns = ['Type']
+
     if not include_non_piezometers:
-        nodes = nodes[nodes['Type']=='Piezometer'].reset_index(drop=True)
+        if 'Type' in nodes.columns:
+            nodes = nodes[nodes['Type'] == 'Piezometer'].reset_index(drop=True)
+
+    # Fill NaN in color columns so non-piezometer nodes get a group label
+    for col in color_columns:
+        nodes[col] = nodes[col].fillna('Other')
+
     # left merge preserves all nodes; rmse NaN for non-piezometers
     df = nodes.merge(rmse_df, on='name', how='left')
     # set missing RMSE to min observed so they get smallest marker size
@@ -442,15 +457,17 @@ def plot_rmse_3d_network(
     smin, smax = size_range
     sizes = smin + (rmses)/(150)*(smax - smin)
 
-    # 4) Map original node index → position in nodes.csv
-    orig_names = pd.read_csv(Path(PREPROCESSED_DIR)/"nodes.csv")['name'].tolist()
-    idx_map = {n:i for i,n in enumerate(orig_names)}
+    # 4) Map original node index → position in adjacency matrix
+    all_nodes_path = Path(PREPROCESSED_DIR) / "nodes.csv"
+    orig_names = pd.read_csv(all_nodes_path)['name'].tolist()
+    idx_map = {n: i for i, n in enumerate(orig_names)}
     filtered_idx = [idx_map[n] for n in names]
 
     N = len(filtered_idx)
 
-        # 5) Precompute raw edges and their weights
+    # 5) Precompute raw edges and their weights
     edge_data = []
+    group_col = color_columns[0] if color_columns else None
     for u in range(N):
         i = filtered_idx[u]
         for v in range(u+1, N):
@@ -459,18 +476,22 @@ def plot_rmse_3d_network(
             if w > 0:
                 x0,y0,z0 = coords[u]
                 x1,y1,z1 = coords[v]
+                grp = f”{group_col} = {df.iloc[u][group_col]}” if group_col else “edges”
                 edge_data.append({
-                    "ends": ((x0,y0,z0), (x1,y1,z1)),
-                    "weight": w,
-                    # pick one “owner” group for legend toggling — 
-                    # here we inherit from the u‐node’s first color_column
-                    "group": f"{color_columns[0]} = {df.iloc[u][color_columns[0]]}"
+                    “ends”: ((x0,y0,z0), (x1,y1,z1)),
+                    “weight”: w,
+                    “group”: grp
                 })
 
-    # scale widths so the smallest weight → width = 1
-    #w_min = min(e["weight"] for e in edge_data)
-    for e in edge_data:
-        e["width"] = e["weight"] #/ w_min
+    # Scale edge widths to a visible range [1, 8]
+    if edge_data:
+        w_min = min(e["weight"] for e in edge_data)
+        w_max = max(e["weight"] for e in edge_data)
+        for e in edge_data:
+            if w_max > w_min:
+                e["width"] = 1 + (e["weight"] - w_min) / (w_max - w_min) * 7
+            else:
+                e["width"] = 3
 
     # 6) build one Scatter3d per edge
     traces = []
@@ -479,7 +500,7 @@ def plot_rmse_3d_network(
         traces.append(go.Scatter3d(
             x=[x0, x1], y=[y0, y1], z=[z0, z1],
             mode='lines',
-            line=dict(width=e["width"] * 3, color='black'),
+            line=dict(width=e["width"], color='black'),
             hoverinfo='text',
             text=[f"Weight: {e['weight']:.3f}"],
             legendgroup=e["group"],   # tie it to the node‐trace group
@@ -523,8 +544,8 @@ def plot_rmse_3d_network(
     fig = go.Figure(data=traces)
     fig.update_layout(
         showlegend=True,
-        updatemenus=[dict(buttons=buttons, direction="down", x=0, y=1.1)],
-        title = {"text": f"{plot_title}: 3D RMSE Network colored by {color_columns[0]}", 
+        updatemenus=[dict(buttons=buttons, direction="down", x=0, y=1.1)] if buttons else [],
+        title = {"text": f"{plot_title}: 3D RMSE Network colored by {color_columns[0] if color_columns else 'node'}",
         "x": 0.5,
         "xanchor": "center"
         },
