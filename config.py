@@ -11,13 +11,15 @@ BASE_PATH = Path(__file__).resolve().parent
 # Experiment tag — change this to write outputs to new folders
 EXPERIMENT = "Independent_Study"
 
-# Directories — inputs (shared across experiments)
-DATA_DIR = BASE_PATH / "data"
-INPUT_DIR = DATA_DIR / "input"
+# Directories — inputs (always point to the original data on Drive)
+if IN_COLAB:
+    INPUT_DIR = Path("/content/drive/MyDrive/Environmental_DL_Project/GroundwaterFlowGNN-main/data/input")
+else:
+    INPUT_DIR = BASE_PATH / "data" / "input"
 PIEZO_CSV_DIR = INPUT_DIR / "piezometers/csv/csv"
 
 # Directories — outputs (experiment-specific)
-PREPROCESSED_DIR = DATA_DIR / f"preprocessed_{EXPERIMENT}"
+PREPROCESSED_DIR = BASE_PATH / "data" / f"preprocessed_{EXPERIMENT}"
 GENERATED_GRAPHS = BASE_PATH / f"generated_graphs_{EXPERIMENT}"
 SCATTER_PLOTS = BASE_PATH / f"scatterplots_{EXPERIMENT}"
 SAVED_MODELS_DIR = BASE_PATH / f"saved_models_{EXPERIMENT}"
