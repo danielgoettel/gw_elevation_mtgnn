@@ -25,7 +25,7 @@ from utils.training_utils import prepare_combined_input, make_predictions, inver
 from utils.metrics import calculate_rmse_per_piezometer, calculate_rmse_per_piezometer_moria, print_mean_std
 from utils.visualization import plot_sequences, plot_sparsity_pattern, plot_comparison_sequence, plot_comparison_sequence_dual_y, plot_rmse_comparison, plot_rmse_3d_network, plot_adj_heatmap
 
-from config import PIEZO_LAYER_INFORMATION, RANDOM_FOREST_TRAINING_DATA, SCATTER_PLOTS, TRAINING_SUMMARIES, SAVED_MODELS_DIR, TRAINING_RESULTS_DIR
+from config import PIEZO_LAYER_INFORMATION, RANDOM_FOREST_TRAINING_DATA, SCATTER_PLOTS, TRAINING_SUMMARIES, SAVED_MODELS_DIR, TRAINING_RESULTS_DIR, RUN_PLOTS_AND_RESULTS
 
 from train_config import define_base_configuration, parameter_variations
 
@@ -81,9 +81,13 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
     # Learning rate scheduler setup
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=config.get('scheduler_patience', 10))
     
-    # Create a directory for saving models if it doesn't exist
+    # Create output directories if they don't exist
     os.makedirs(str(SAVED_MODELS_DIR), exist_ok=True)
-    os.makedirs("failed_runs", exist_ok=True)  # Ensure the directory exists
+    os.makedirs(str(TRAINING_RESULTS_DIR), exist_ok=True)
+    os.makedirs(str(TRAINING_SUMMARIES), exist_ok=True)
+    os.makedirs(str(RUN_PLOTS_AND_RESULTS), exist_ok=True)
+    os.makedirs(str(SCATTER_PLOTS), exist_ok=True)
+    os.makedirs("failed_runs", exist_ok=True)
     failed_runs_filepath = "failed_runs/failed_models.txt"
 
     losses_dict = {"train_losses": {}, "eval_losses": {}}

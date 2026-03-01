@@ -956,6 +956,7 @@ def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, perce
     #adj_matrix = generate_complex_adjacency_matrix(coordinates, num_piezo, num_pump, num_prec, num_evap, num_river, percentage, n_piezo_connected)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    GENERATED_GRAPHS.mkdir(parents=True, exist_ok=True)
 
     if graph_type == 'default':
         adj_matrix = generate_complex_adjacency_matrix(coordinates, num_piezo, num_pump, num_prec, num_evap, num_river, percentage, n_piezo_connected, n_pumps_connected)
