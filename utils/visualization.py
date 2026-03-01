@@ -476,11 +476,11 @@ def plot_rmse_3d_network(
             if w > 0:
                 x0,y0,z0 = coords[u]
                 x1,y1,z1 = coords[v]
-                grp = f”{group_col} = {df.iloc[u][group_col]}” if group_col else “edges”
+                grp = f"{group_col} = {df.iloc[u][group_col]}" if group_col else "edges"
                 edge_data.append({
-                    “ends”: ((x0,y0,z0), (x1,y1,z1)),
-                    “weight”: w,
-                    “group”: grp
+                    "ends": ((x0,y0,z0), (x1,y1,z1)),
+                    "weight": w,
+                    "group": grp
                 })
 
     # Scale edge widths to a visible range [1, 8]
