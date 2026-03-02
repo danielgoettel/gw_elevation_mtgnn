@@ -37,11 +37,23 @@ def define_base_configuration():
         'learning_rate': 0.001,
         'num_epochs': 200,
         'batch_size': 32,
-        'F_w': 3,
-        'model_type': 'MTGNN',
-        'early_stopping_patience': 50,
+        'F_w': 1,
+        'model_type': 'MTGNN',  # Options: 'MTGNN', 'MultigraphGNN', 'LSTM'
+        'early_stopping_patience': 30,
         'min_delta': 0.001,
         'scheduler_patience': 10,
+
+        # MultigraphGNN parameters (only used when model_type='MultigraphGNN')
+        'num_relations': 5,
+        'rgcn_num_bases': None,  # basis decomposition (None = no decomposition)
+
+        # Directed graph — piezo-piezo edges flow from higher to lower GW elevation
+        'directed_graph': False,
+
+        # Dynamic node dropout — isolate high-RMSE nodes mid-training
+        'node_dropout': False,
+        'node_dropout_warmup': 60,          # epochs before evaluating for dropout
+        'node_dropout_sd_threshold': 3.0,   # drop nodes with RMSE > mean + threshold * SD
     }
 
 # Define variations for each parameter (exclude 'in_dim' and 'out_dim')

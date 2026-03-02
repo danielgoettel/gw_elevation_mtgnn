@@ -418,10 +418,13 @@ def main(synthetic_data = False):
     locations_no_missing = missing_counts[missing_counts == 0].index
     df_river = df_river[locations_no_missing]
 
+    # Mean groundwater elevation per piezometer (before normalization), for directed graph option
+    mean_gw_elevation = df_piezo.mean().values
+
     train_data, val_data, test_data, train_mask, val_mask, test_mask, scaler = split_and_normalize_data(df_piezo, missing_data_mask, (df_pumping_wells, df_precipitation, df_evaporation, df_river), config)
 
     # Return the additional variables alongside the datasets
-    return train_data, val_data, test_data, train_mask, val_mask, test_mask, df_piezo_columns, pump_columns, locations_no_missing, scaler
+    return train_data, val_data, test_data, train_mask, val_mask, test_mask, df_piezo_columns, pump_columns, locations_no_missing, scaler, mean_gw_elevation
 
 if __name__ == "__main__":
     main()

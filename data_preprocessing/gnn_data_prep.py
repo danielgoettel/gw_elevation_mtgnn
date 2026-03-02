@@ -12,7 +12,8 @@ from pathlib import Path
 import random
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.impute import SimpleImputer
-from sklearn.metrics.pairwise import pairwise_distances  
+from sklearn.metrics.pairwise import pairwise_distances
+from data_preprocessing.pyg_graph import dense_adj_to_pyg, save_pyg_graph
 from datetime import datetime
 
 from config import (
@@ -244,7 +245,7 @@ def generate_complex_adjacency_matrix(all_coords, num_piezo, num_pump, num_prec,
             adj_matrix[i, river_indices] = 0.5
 
     # Symmetrize the matrix for undirected connections
-    adj_matrix = adj_matrix + adj_matrix.T
+    adj_matrix = np.maximum(adj_matrix, adj_matrix.T)
 
     return adj_matrix
 
@@ -372,10 +373,10 @@ def generate_layer_constrained_adjacency_matrix(
 
             
             adj_matrix[i, river_idxs] = 0.5
-  
+
 
     # Symmetrize the matrix for undirected connections
-    adj_matrix = adj_matrix + adj_matrix.T
+    adj_matrix = np.maximum(adj_matrix, adj_matrix.T)
 
     return adj_matrix
 """
@@ -924,7 +925,7 @@ def load_and_concatenate_metadata(piezo_metadata_path, pump_metadata_path, evap_
     )
 
 
-def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, percentage=None, n_piezo_connected=3, feature_importance_multiplier = None, n_pumps_connected = 4, weight_mode = 'fixed', same_layer = False, same_layer_kwargs = None, ext_data = True, multiply_exo_weights = False):
+def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, percentage=None, n_piezo_connected=3, feature_importance_multiplier = None, n_pumps_connected = 4, weight_mode = 'fixed', same_layer = False, same_layer_kwargs = None, ext_data = True, multiply_exo_weights = False, directed_graph=False, mean_gw_elevation=None):
     # Paths to the metadata files (update these paths according to your folder structure)
 
     metadata_path = PIEZO_METADATA
@@ -943,9 +944,19 @@ def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, perce
     # Prepare static features
     static_features = create_static_features(all_x, all_y, all_z, all_type)
 
+    # Build node type labels from index ranges
+    type_map = {1: 'Piezometer', 2: 'Pump', 3: 'Precipitation', 4: 'Evaporation', 5: 'River'}
+    type_labels = [type_map[int(t)] for t in all_type]
+
     # build a DataFrame and export
-    pd.DataFrame({"name": node_names, "x":all_x, "y": all_y, "z":all_z }) \
-      .to_csv(outdir / "nodes.csv", index=False)
+    nodes_df = pd.DataFrame({"name": node_names, "x": all_x, "y": all_y, "z": all_z, "Type": type_labels})
+
+    # Merge geolayer/regis_layer info for piezometers if available
+    if Path(PIEZO_LAYER_INFORMATION).exists():
+        layer_df = pd.read_csv(PIEZO_LAYER_INFORMATION)[['name', 'geolayer', 'regis_layer']].drop_duplicates(subset='name')
+        nodes_df = nodes_df.merge(layer_df, on='name', how='left')
+
+    nodes_df.to_csv(outdir / "nodes.csv", index=False)
 
     print(f"Wrote {len(node_names)} names to {outdir/'node_names.csv'}")
 
@@ -986,6 +997,12 @@ def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, perce
     else:
         raise ValueError(f"Unknown graph_type: {graph_type}")
 
+    # Apply directional mask: keep piezo-piezo edges only from higher to lower GW elevation
+    if directed_graph and mean_gw_elevation is not None:
+        elev_mask = mean_gw_elevation[:, None] >= mean_gw_elevation[None, :]  # (num_piezo, num_piezo)
+        adj_matrix[:num_piezo, :num_piezo] *= elev_mask
+        n_directed = np.count_nonzero(adj_matrix[:num_piezo, :num_piezo])
+        print(f"Directed graph: {n_directed} piezo-piezo edges (higher to lower GW elevation)")
 
     base_data_path = PREPROCESSED_DIR
 
@@ -996,7 +1013,12 @@ def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, perce
     adj_matrix_tensor = torch.tensor(adj_matrix).float()
     static_features_tensor = static_features.clone().detach()
 
-    return adj_matrix_tensor, static_features_tensor
+    # Also produce PyG sparse graph format (edge_index, edge_type, edge_weight)
+    pyg_graph = dense_adj_to_pyg(adj_matrix, num_piezo, num_pump, num_prec, num_evap, num_river)
+    save_pyg_graph(pyg_graph, base_data_path / 'pyg_graph.pt')
+    print(f"PyG graph: {pyg_graph['edge_index'].shape[1]} edges, {pyg_graph['num_relations']} relation types")
+
+    return adj_matrix_tensor, static_features_tensor, pyg_graph
 
 if __name__ == "__main__":
     main()

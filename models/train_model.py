@@ -12,10 +12,10 @@ import json
 import itertools
 import sys
 
-from data_preprocessing import process_data 
-from data_preprocessing import gnn_data_prep 
-from models.mtgnn_lstm import MTGNN_LSTM
+from data_preprocessing import process_data
+from data_preprocessing import gnn_data_prep
 from models.mtgnn import MTGNN
+from models.multigraph_gnn import MultigraphGNN
 
 from models.lstm_model import LSTMModel
 from data_preprocessing.dataset import AutoregressiveTimeSeriesDataset
@@ -37,45 +37,139 @@ import datetime
 from functools import partial
 
 
-def create_mtgnn_model(num_features, num_nodes, seq_length, model_type, **kwargs):
-    """
-    Initialize the MTGNN model with the specified parameters.
-    """
-    # Extract MTGNN specific parameters from kwargs
+def create_model(num_features, num_nodes, seq_length, model_type, **kwargs):
+    """Factory function to create the appropriate model based on model_type."""
+    if model_type == 'MTGNN':
+        return _create_mtgnn(num_features, num_nodes, seq_length, **kwargs)
+    elif model_type == 'MultigraphGNN':
+        return _create_multigraph_gnn(num_nodes, seq_length, **kwargs)
+    elif model_type == 'LSTM':
+        return _create_lstm_model()
+    else:
+        raise ValueError(f"Unknown model_type: {model_type}")
+
+
+def _create_mtgnn(num_features, num_nodes, seq_length, **kwargs):
+    """Create MTGNN model."""
     mtgnn_params = {key: kwargs[key] for key in kwargs if key in {
         'gcn_true', 'build_adj', 'gcn_depth', 'kernel_set', 'kernel_size',
         'dropout', 'subgraph_size', 'node_dim', 'dilation_exponential',
         'conv_channels', 'residual_channels', 'skip_channels', 'end_channels',
-        'in_dim', 'out_dim', 'layers', 'propalpha', 'tanhalpha', 
+        'in_dim', 'out_dim', 'layers', 'propalpha', 'tanhalpha',
         'layer_norm_affline', 'xd'
     }}
     mtgnn_params['num_nodes'] = num_nodes
-    mtgnn_params['seq_length'] = seq_length + 1  # padding to match the external forces
+    mtgnn_params['seq_length'] = seq_length + 1
     mtgnn_params['in_dim'] = 1
     mtgnn_params['out_dim'] = 1
-    mtgnn_params['xd'] = num_features  # Assuming 'xd' is the number of static features
+    mtgnn_params['xd'] = num_features
+    return MTGNN(**mtgnn_params)
 
-    return MTGNN(**mtgnn_params) if model_type=='MTGNN' else MTGNN_LSTM(**mtgnn_params)
+
+def _create_multigraph_gnn(num_nodes, seq_length, **kwargs):
+    """Create MultigraphGNN model."""
+    return MultigraphGNN(
+        num_nodes=num_nodes,
+        num_relations=kwargs.get('num_relations', 5),
+        seq_length=seq_length + 1,
+        in_dim=1,
+        out_dim=1,
+        residual_channels=kwargs.get('residual_channels', 64),
+        conv_channels=kwargs.get('conv_channels', 64),
+        skip_channels=kwargs.get('skip_channels', 64),
+        end_channels=kwargs.get('end_channels', 128),
+        layers=kwargs.get('layers', 4),
+        kernel_set=kwargs.get('kernel_set', [1, 2]),
+        kernel_size=kwargs.get('kernel_size', 2),
+        dilation_exponential=kwargs.get('dilation_exponential', 2),
+        dropout=kwargs.get('dropout', 0.5),
+        layer_norm_affline=kwargs.get('layer_norm_affline', True),
+        rgcn_num_bases=kwargs.get('rgcn_num_bases', None),
+    )
 
 
-def create_lstm_model():
-    input_size = 219  
+def _create_lstm_model():
+    input_size = 219
     hidden_size = 150
-    output_size = 200  
+    output_size = 200
     external_forces_size = 19
     dense_output_size = 100
-
-    # Correct input size calculation
     return LSTMModel(input_size, hidden_size, output_size, external_forces_size, dense_output_size)
 
 
 
-def train(model, optimizer, loss_function, device, num_epochs, train_data, val_data, train_mask, val_mask, df_piezo_columns, num_piezo, static_features, A_tilde, F_w, W, config, model_type):
+def model_forward(model, combined_input, model_type, config, device,
+                   A_tilde=None, static_features=None,
+                   edge_index=None, edge_type=None, edge_weight=None,
+                   current_forces=None):
+    """Model-agnostic forward pass dispatcher."""
+    if model_type == 'MTGNN':
+        if config['build_adj']:
+            return model(combined_input, FE=static_features.to(device))
+        return model(combined_input, A_tilde.to(device), FE=static_features.to(device))
+    elif model_type == 'MultigraphGNN':
+        return model(combined_input, edge_index, edge_type, edge_weight)
+    elif model_type == 'LSTM':
+        return model(combined_input, current_forces)
+    else:
+        raise ValueError(f"Unknown model_type: {model_type}")
+
+
+def compute_val_rmse_per_node(model, eval_loader, device, future_window, W,
+                              model_type, config, A_tilde, static_features,
+                              num_piezo, edge_index, edge_type, edge_weight):
+    """Compute per-node RMSE from validation batches (on scaled data)."""
+    model.eval()
+    node_squared_errors = np.zeros(num_piezo)
+    node_counts = np.zeros(num_piezo)
+
+    with torch.no_grad():
+        for input_sequence, external_forces_sequence, target_sequence, mask_sequence in eval_loader:
+            input_sequence = input_sequence.to(device)
+            external_forces_sequence = external_forces_sequence.to(device)
+            target_sequence = target_sequence.to(device)
+            mask_sequence = mask_sequence.to(device)
+
+            current_input = input_sequence
+            with autocast(device_type="cuda"):
+                predictions = []
+                for t in range(future_window):
+                    current_forces = external_forces_sequence[:, t:(W + t + 1), :]
+                    combined_input = prepare_combined_input(current_input, current_forces)
+                    output = model_forward(
+                        model, combined_input, model_type, config, device,
+                        A_tilde=A_tilde, static_features=static_features,
+                        edge_index=edge_index, edge_type=edge_type, edge_weight=edge_weight,
+                        current_forces=current_forces)
+                    if model_type in ('MTGNN', 'MultigraphGNN'):
+                        output = output[:, :, :num_piezo, 0]
+                    predictions.append(output)
+                    current_input = torch.cat((current_input[:, 1:, :], output), dim=1)
+                predictions = torch.cat(predictions, dim=1)
+
+            # Per-node squared error, respecting the missing-data mask
+            sq_err = ((predictions - target_sequence) ** 2 * mask_sequence).cpu().numpy()
+            mask_np = mask_sequence.cpu().numpy()
+            # Sum across batch and time dimensions, per node
+            node_squared_errors += sq_err.sum(axis=(0, 1))[:num_piezo]
+            node_counts += mask_np.sum(axis=(0, 1))[:num_piezo]
+
+    return np.sqrt(node_squared_errors / np.maximum(node_counts, 1))
+
+
+def train(model, optimizer, loss_function, device, num_epochs, train_data, val_data,
+          train_mask, val_mask, df_piezo_columns, num_piezo, static_features, A_tilde,
+          F_w, W, config, model_type,
+          edge_index=None, edge_type=None, edge_weight=None):
     
     # Early stopping parameters
     early_stopping_patience = config.get('early_stopping_patience', 50)
     min_delta = config.get('min_delta', 0.001)
     best_loss = float('inf')
+
+    # Node dropout state
+    node_mask = None  # None = all nodes active; tensor of 1s/0s when dropout applied
+    dropped_node_names = []
 
     # Learning rate scheduler setup
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=config.get('scheduler_patience', 10))
@@ -168,27 +262,32 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
                       for t in range(future_window):
                           current_forces = external_forces_sequence[:, t : (W+t+1), :]
                           combined_input = prepare_combined_input(current_input, current_forces)
-          
-                          if model_type == 'MTGNN' or 'MTGNN_LSTM':
-                              output = model(combined_input, A_tilde.to(device), FE=static_features.to(device)) if not config['build_adj'] else model(combined_input, FE=static_features.to(device))
-                          elif model_type == 'LSTM' or 'tCNN':
-                              output = model(combined_input, current_forces)
-                          else:
-                              raise ValueError("Invalid model type. Choose 'MTGNN' or 'LSTM'.")
-          
-                          output = output[:, :, :num_piezo, 0] if model_type == 'MTGNN' or 'MTGNN_LSTM' else output
+
+                          output = model_forward(
+                              model, combined_input, model_type, config, device,
+                              A_tilde=A_tilde, static_features=static_features,
+                              edge_index=edge_index, edge_type=edge_type, edge_weight=edge_weight,
+                              current_forces=current_forces)
+
+                          if model_type in ('MTGNN', 'MultigraphGNN'):
+                              output = output[:, :, :num_piezo, 0]
                           predictions.append(output)
                           next_input = output
                           current_input = torch.cat((current_input[:, 1:, :], next_input), dim=1)
           
                       # Multi-Step loss
                       predictions = torch.cat(predictions, dim=1)
-                      
+
+                      # Apply node dropout mask (zero out dropped nodes' loss)
+                      if node_mask is not None:
+                          nm = node_mask.unsqueeze(0).unsqueeze(0)
+                          predictions = predictions * nm
+                          target_sequence = target_sequence * nm
+
                       predictions_masked = predictions * mask_sequence
                       target_masked = target_sequence * mask_sequence
                       loss = loss_function(predictions_masked, target_masked)
-        
-                    # loss = loss_function(predictions, target_sequence)
+
                     scaler.scale(loss).backward()
                     scaler.step(optimizer)
                     scaler.update()
@@ -215,31 +314,34 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
 
                         with autocast(device_type = "cuda"):
                           predictions = []
-                          for t in range(future_window):  
+                          for t in range(future_window):
                               current_forces = external_forces_sequence[:, t : (W+t + 1), :]
                               combined_input = prepare_combined_input(current_input, current_forces)
-          
-                              if model_type == 'MTGNN' or 'MTGNN_LSTM':
-                                  output = model(combined_input, A_tilde.to(device), FE=static_features.to(device)) if not config['build_adj'] else model(combined_input, FE=static_features.to(device))
-                              elif model_type == 'LSTM' or 'tCNN':
-          
-                                  output = model(combined_input, current_forces)
-                              else:
-                                  raise ValueError("Invalid model type. Choose 'MTGNN' or 'LSTM'.")
-          
-                              output = output[:, :, :num_piezo, 0] if model_type == 'MTGNN' or 'MTGNN_LSTM' else output
+
+                              output = model_forward(
+                                  model, combined_input, model_type, config, device,
+                                  A_tilde=A_tilde, static_features=static_features,
+                                  edge_index=edge_index, edge_type=edge_type, edge_weight=edge_weight,
+                                  current_forces=current_forces)
+
+                              if model_type in ('MTGNN', 'MultigraphGNN'):
+                                  output = output[:, :, :num_piezo, 0]
                               predictions.append(output)
-                              
-                              # Update the input sequence for the next prediction
-                              next_input = output 
+
+                              next_input = output
                               current_input = torch.cat((current_input[:, 1:, :], next_input), dim=1)
           
                           predictions = torch.cat(predictions, dim=1)
-          
+
+                          # Apply node dropout mask
+                          if node_mask is not None:
+                              nm = node_mask.unsqueeze(0).unsqueeze(0)
+                              predictions = predictions * nm
+                              target_sequence = target_sequence * nm
+
                           predictions_masked = predictions * mask_sequence
                           target_masked = target_sequence * mask_sequence
                           loss = loss_function(predictions_masked, target_masked)
-                          # loss = loss_function(predictions, target_sequence)
                           total_eval_loss += loss.item()
           
                 torch.cuda.empty_cache()  # Be cautious with frequent use
@@ -253,9 +355,50 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
                 if epoch % 10 == 9:
                     print(f"Epoch {epoch + 1}, Train Loss: {train_loss:.2e}, Eval Loss: {eval_loss:.2e}")
         
+                # Dynamic node dropout — evaluate and mask after warmup epoch
+                if (config.get('node_dropout') and node_mask is None
+                        and epoch + 1 == config.get('node_dropout_warmup', 60)):
+                    per_node_rmse = compute_val_rmse_per_node(
+                        model, eval_loader, device, future_window, W,
+                        model_type, config, A_tilde, static_features,
+                        num_piezo, edge_index, edge_type, edge_weight)
+                    mean_rmse = per_node_rmse.mean()
+                    std_rmse = per_node_rmse.std()
+                    threshold = mean_rmse + config.get('node_dropout_sd_threshold', 3.0) * std_rmse
+                    dropped_indices = np.where(per_node_rmse > threshold)[0]
+
+                    if len(dropped_indices) > 0:
+                        node_mask = torch.ones(num_piezo, device=device)
+                        node_mask[dropped_indices] = 0.0
+                        dropped_node_names = [df_piezo_columns[i] for i in dropped_indices]
+
+                        # Edge masking — zero out adjacency rows/cols for MTGNN
+                        if A_tilde is not None:
+                            full_mask = torch.ones(A_tilde.shape[0], device=A_tilde.device)
+                            full_mask[:num_piezo] = node_mask.to(A_tilde.device)
+                            A_tilde = A_tilde * full_mask.unsqueeze(0) * full_mask.unsqueeze(1)
+
+                        # Edge masking — filter edges for MultigraphGNN
+                        if edge_index is not None:
+                            src_is_dropped = torch.zeros(edge_index.shape[1], dtype=torch.bool, device=edge_index.device)
+                            dst_is_dropped = torch.zeros(edge_index.shape[1], dtype=torch.bool, device=edge_index.device)
+                            for idx in dropped_indices:
+                                src_is_dropped |= (edge_index[0] == idx)
+                                dst_is_dropped |= (edge_index[1] == idx)
+                            keep_edges = ~(src_is_dropped | dst_is_dropped)
+                            edge_index = edge_index[:, keep_edges]
+                            edge_type = edge_type[keep_edges]
+                            if edge_weight is not None:
+                                edge_weight = edge_weight[keep_edges]
+
+                        print(f"Node dropout at epoch {epoch + 1}: {len(dropped_indices)} nodes dropped (threshold={threshold:.4f})")
+                        print(f"  Dropped nodes: {dropped_node_names}")
+                    else:
+                        print(f"Node dropout at epoch {epoch + 1}: no outlier nodes found (threshold={threshold:.4f})")
+
                 # Adaptive Learning Rate
                 scheduler.step(eval_loss)
-        
+
                 # Early Stopping Check
                 if eval_loss + min_delta < best_loss:
                     best_loss = eval_loss
@@ -301,72 +444,30 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
                 print(f"Out of memory when processing {model_filename}.")
                 with open(failed_runs_filepath, "a") as file:
                     file.write(f"{model_filename}\n")
-                return None  # Exit the training function early
+                return dropped_node_names
             else:
                 raise  # Re-raise the exception if it's not a memory error
 
+    return dropped_node_names
 
-"""
+
 def generate_configurations():
+    """Generate configs: base config + Cartesian product of all parameter_variations."""
     base_config = define_base_configuration()
-    # get all the parameter names and their variation lists
     params = list(parameter_variations.keys())
     variations = [parameter_variations[p] for p in params]
 
-    configs = []
+    if not params:
+        return [base_config]
 
-    configs.append(base_config)
-
-    # loop over every tuple in the Cartesian product of variation-lists
+    configs = [base_config]
     for combo in itertools.product(*variations):
         cfg = base_config.copy()
-        # assign each parameter its value from this combo
         for p, v in zip(params, combo):
             cfg[p] = v
         configs.append(cfg)
 
     return configs
-"""
-
-
-
-def generate_configurations():
-    base_config = define_base_configuration()
-    configs = [base_config]  # Start with the base configuration
-    
-    # Iterate over each parameter and its variations
-    for param, variations in parameter_variations.items():
-        for variation in variations:
-            new_config = base_config.copy()
-            new_config[param] = variation
-            configs.append(new_config)
-    
-    return configs
-
-"""
-def generate_all_configurations():
-    base_config = define_base_configuration()
-    configs = []
-
-    # pull out the keys and the list of lists of values
-    keys = list(parameter_variations.keys())
-    value_lists = [parameter_variations[k] for k in keys]
-
-    # if there are no variations defined, just return the base
-    if not keys:
-        return [base_config]
-
-    # for every tuple of one choice per parameter…
-    for combo in itertools.product(*value_lists):
-        cfg = copy.deepcopy(base_config)
-        # assign each key its chosen value
-        for k, v in zip(keys, combo):
-            cfg[k] = v
-        configs.append(cfg)
-
-    # optionally include the pure base config as well:
-    return [base_config] + configs
-"""
 
 def main(run_all=True):
 
@@ -387,18 +488,24 @@ def main(run_all=True):
         else:
             print(f"Running base configuration {i} of {total_runs}")
         
-        test_rmse_mean, test_rmse_std, geolayer_summary = run_training_and_evaluation(config)
-        
+        test_rmse_mean, test_rmse_std, geolayer_summary, dropped_node_names = run_training_and_evaluation(config)
+
         row = {
+            "Timestamp":                datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "Model Type":               config["model_type"],
             "Graph Type":               config["graph_type"],
             "Percentage":               config["percentage"],
             "Piezometer Connections":   config["n_piezo_connected"],
             "Pump Connections":         config["n_pumps_connected"],
-            'FIM' :                     config["feature_importance_multiplier"],  
+            'FIM':                      config["feature_importance_multiplier"],
             'Weight Mode':              config['weight_mode'],
-            'Same Layer':               config['layer_constrain' ],
-            #'Penalties':                config['same_layer_kwargs'],
-            'Multiply_Exo_Weights':     config['multiply_exo_weights'],  
+            'Same Layer':               config['layer_constrain'],
+            'Multiply_Exo_Weights':     config['multiply_exo_weights'],
+            "W":                        config['W'],
+            "F_w":                      config['F_w'],
+            "Node Dropout":             config.get('node_dropout', False),
+            "Dropped Nodes":            ", ".join(dropped_node_names) if dropped_node_names else "",
+            "Directed Graph":           config.get('directed_graph', False),
             "Overall RMSE Mean":        test_rmse_mean,
             "Overall RMSE StdDev":      test_rmse_std,
         }
@@ -417,12 +524,21 @@ def main(run_all=True):
     df_summary = pd.DataFrame(summaries)
 
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    out_fname = f"summary_{ts}.csv"
-    df_summary.to_csv(TRAINING_SUMMARIES / f"summary_{ts}.csv" , index=False)
-    print(f"→ Wrote summary to {out_fname}")
-    
+    os.makedirs(str(TRAINING_SUMMARIES), exist_ok=True)
+    df_summary.to_csv(TRAINING_SUMMARIES / f"summary_{ts}.csv", index=False)
+    print(f"→ Wrote run summary to summary_{ts}.csv")
+
+    # Append to persistent overall results table
+    overall_path = TRAINING_SUMMARIES / "overall_results.csv"
+    if overall_path.exists():
+        df_existing = pd.read_csv(overall_path)
+        df_combined = pd.concat([df_existing, df_summary], ignore_index=True)
+    else:
+        df_combined = df_summary
+    df_combined.to_csv(overall_path, index=False)
+    print(f"→ Updated overall results ({len(df_combined)} total rows) at {overall_path}")
+
     if run_all:
-        # After all configurations have been tested, analyze the results
         analyze_results()
 
 
@@ -432,9 +548,9 @@ def run_training_and_evaluation(config):
     print(f"Using {device} device.")
 
     # Assuming process_data.main() prepares and returns the necessary datasets and GNN data
-    train_data, val_data, test_data, train_mask, val_mask, test_mask, df_piezo_columns, pump_columns, locations_no_missing, scaler = process_data.main(config['synthetic_data'])
+    train_data, val_data, test_data, train_mask, val_mask, test_mask, df_piezo_columns, pump_columns, locations_no_missing, scaler, mean_gw_elevation = process_data.main(config['synthetic_data'])
     train_data.to_csv(RANDOM_FOREST_TRAINING_DATA)
-    A_tilde, static_features = gnn_data_prep.main(df_piezo_columns, pump_columns, locations_no_missing, config['graph_type'], config['percentage'] , config['n_piezo_connected'], config['feature_importance_multiplier'], config['n_pumps_connected'], config['weight_mode'], config['layer_constrain'], config['ext_data'], config['multiply_exo_weights'])
+    A_tilde, static_features, pyg_graph = gnn_data_prep.main(df_piezo_columns, pump_columns, locations_no_missing, config['graph_type'], config['percentage'] , config['n_piezo_connected'], config['feature_importance_multiplier'], config['n_pumps_connected'], config['weight_mode'], config['layer_constrain'], config['ext_data'], config['multiply_exo_weights'], directed_graph=config.get('directed_graph', False), mean_gw_elevation=mean_gw_elevation)
     
     ahm = plot_adj_heatmap(A_tilde)
      
@@ -450,15 +566,20 @@ def run_training_and_evaluation(config):
 
     F_w = config.get('F_w', 3)
     model_type = config.get('model_type', 'MTGNN')
-    if model_type=='MTGNN' or 'MTGNN_LSTM':
-        model = create_mtgnn_model(
-            num_features=num_features,
-            num_nodes=num_nodes,
-            seq_length=seq_length,
-            **config  # Unpacks and passes the configuration dictionary (includes model_type)
-        ).to(device)
-    else: 
-        model = create_lstm_model().to(device)
+    model = create_model(
+        num_features=num_features,
+        num_nodes=num_nodes,
+        seq_length=seq_length,
+        **config
+    ).to(device)
+
+    # Prepare PyG graph tensors for GPU if needed
+    if model_type == 'MultigraphGNN':
+        edge_index = pyg_graph['edge_index'].to(device)
+        edge_type = pyg_graph['edge_type'].to(device)
+        edge_weight = pyg_graph['edge_weight'].to(device)
+    else:
+        edge_index = edge_type = edge_weight = None
 
     for param in model.parameters():
         param.requires_grad = True
@@ -469,12 +590,20 @@ def run_training_and_evaluation(config):
     optimizer = optim.Adam(model.parameters(), lr=config.get('learning_rate', 0.001))
     loss_function = nn.MSELoss()
 
-    train(model, optimizer, loss_function, device, num_epochs=config.get('num_epochs', 200), train_data=train_data, val_data=val_data, train_mask=train_mask, val_mask=val_mask, df_piezo_columns=df_piezo_columns, num_piezo=num_piezo, static_features=static_features, A_tilde=A_tilde, F_w=F_w, W=W, config = config, model_type = model_type)
+    dropped_node_names = train(model, optimizer, loss_function, device, num_epochs=config.get('num_epochs', 200),
+          train_data=train_data, val_data=val_data, train_mask=train_mask, val_mask=val_mask,
+          df_piezo_columns=df_piezo_columns, num_piezo=num_piezo, static_features=static_features,
+          A_tilde=A_tilde, F_w=F_w, W=W, config=config, model_type=model_type,
+          edge_index=edge_index, edge_type=edge_type, edge_weight=edge_weight)
+    if dropped_node_names is None:
+        dropped_node_names = []
 
 
     # Selecting first samples from training and testing datasets
     test_sample = AutoregressiveTimeSeriesDataset(test_data, input_window=W, max_future_window=100, missing_data_mask = test_mask, num_piezo = num_piezo)[1]
-    test_input, test_predicted_model, test_target = make_predictions(model, test_sample, device, 100, W, A_tilde, static_features, num_piezo, modeltype=model_type)
+    test_input, test_predicted_model, test_target = make_predictions(
+        model, test_sample, device, 100, W, A_tilde, static_features, num_piezo,
+        modeltype=model_type, edge_index=edge_index, edge_type=edge_type, edge_weight=edge_weight)
         
     # Transform predictions back to original scale
 
@@ -509,12 +638,26 @@ def run_training_and_evaluation(config):
     })
     merged = rmse_df.merge(layer_info, on='name', how='left')
 
-    # right before you call plot_rmse_3d_network:
-    title_str = (
-        f"{model_type} | graph={config['graph_type']} | "
-        f"topo={config['n_piezo_connected']} | pumps={config['n_pumps_connected']} |  Evap and Precip Removed = {config['exclude_evap_precip']} |perturb weights = {config['perturb_weights']}"
-        #weight_mode={config['weight_mode']} | multiply_exo_weights={config['multiply_exo_weights']} "
-    )
+    # Build title from all relevant config options
+    title_parts = [
+        f"{model_type}",
+        f"graph={config['graph_type']}",
+        f"topo={config['n_piezo_connected']}",
+        f"pumps={config['n_pumps_connected']}",
+        f"W={config['W']}",
+        f"weight_mode={config['weight_mode']}",
+    ]
+    if config.get('exclude_evap_precip'):
+        title_parts.append(f"exclude_evap_precip={config['exclude_evap_precip']}")
+    if config.get('perturb_weights'):
+        title_parts.append("perturb_weights")
+    if config.get('multiply_exo_weights'):
+        title_parts.append("multiply_exo_weights")
+    if config.get('directed_graph'):
+        title_parts.append("directed")
+    if config.get('node_dropout'):
+        title_parts.append(f"node_dropout(warmup={config.get('node_dropout_warmup')}, sd={config.get('node_dropout_sd_threshold')})")
+    title_str = " | ".join(title_parts)
 
     try:
       scatter = plot_rmse_3d_network(rmse_df, title_str)
@@ -539,7 +682,7 @@ def run_training_and_evaluation(config):
     print("\n📊 RMSE Summary by Geolayer:")
     print(geolayer_summary.to_string(index=False))
 
-    return test_rmse_mean, test_rmse_std, geolayer_summary
+    return test_rmse_mean, test_rmse_std, geolayer_summary, dropped_node_names
 
 if __name__ == "__main__":
     main(run_all=False) # for running only the base configuration
