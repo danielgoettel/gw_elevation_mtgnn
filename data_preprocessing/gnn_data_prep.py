@@ -259,7 +259,8 @@ import numpy as np
 
 def generate_layer_constrained_adjacency_matrix(
     all_coords, piezo_names, num_piezo, num_pump, num_prec, num_evap, num_river,
-    layer_column="geolayer", percentage=None, n_piezo_connected=3, n_pumps_connected = 4, exo_penalties = False, rf_perturb = True
+    layer_column="geolayer", percentage=None, n_piezo_connected=3, n_pumps_connected=4,
+    exo_penalties=False, weight_mode='fixed'
 ):
     """
     Create adjacency matrix by connecting piezometers only if they are in the same layer
@@ -300,7 +301,8 @@ def generate_layer_constrained_adjacency_matrix(
         if layer_df.loc[piezo_names[i], "geolayer"] == "aq2": aq2_indices_list.append(i)  #Now you have a list of indices of piezometer indices for aq2.
 
 
-    if rf_perturb:
+    rf_full = None
+    if weight_mode == 'variable':
       rf_feature_importance = joblib.load(RF_TRAINED_PIEZOS_ONLY)
       P = rf_feature_importance.shape[0]
       if P != num_piezo:
@@ -308,7 +310,7 @@ def generate_layer_constrained_adjacency_matrix(
             f"Expected RF importances shape ({num_piezo},{num_piezo}), got {rf_feature_importance.shape}"
         )
 
-      mask = rf_feature_importance> 0
+      mask = rf_feature_importance > 0
       nonzero = rf_feature_importance[mask]
       min_w, max_w = nonzero.min(), nonzero.max()
 
@@ -316,11 +318,10 @@ def generate_layer_constrained_adjacency_matrix(
       rf_scaled[mask] = (
           (rf_feature_importance[mask] - min_w)
           / (max_w - min_w)                 # now in [0,1]
-          * (0.16 - 0.08)                    # now in [0,0.1]
-          + 0.08                            # now in [0.08,0.12]
+          * (0.16 - 0.08)                    # now in [0, 0.08]
+          + 0.08                            # now in [0.08, 0.16]
       )
 
-      # 3. use rf_scaled instead of rf_full
       rf_full = rf_scaled
 
 
@@ -340,9 +341,10 @@ def generate_layer_constrained_adjacency_matrix(
         ]
         if same_layer:
             nearest = sorted(same_layer, key=lambda j: dist_matrix[i, j])[:n_piezo_connected]
-            if rf_perturb:
+            if weight_mode == 'variable' and rf_full is not None:
               adj_matrix[i, nearest] = rf_full[i, nearest]
-            else: adj_matrix[i, nearest] = 0.1
+            else:
+              adj_matrix[i, nearest] = 0.1
               
 
 
@@ -977,10 +979,10 @@ def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, perce
         adj_matrix = generate_complex_adjacency_matrix(coordinates, num_piezo, num_pump, num_prec, num_evap, num_river, percentage, n_piezo_connected, n_pumps_connected)
         np.save(GENERATED_GRAPHS / f"adj_default_{percentage}_percent_{timestamp}.npy", adj_matrix)
     elif graph_type == 'geolayer':
-        adj_matrix = generate_layer_constrained_adjacency_matrix(coordinates, df_piezo_columns, num_piezo, num_pump, num_prec, num_evap, num_river, layer_column='geolayer', percentage=percentage, n_piezo_connected = n_piezo_connected, n_pumps_connected = n_pumps_connected)
+        adj_matrix = generate_layer_constrained_adjacency_matrix(coordinates, df_piezo_columns, num_piezo, num_pump, num_prec, num_evap, num_river, layer_column='geolayer', percentage=percentage, n_piezo_connected=n_piezo_connected, n_pumps_connected=n_pumps_connected, weight_mode=weight_mode)
         np.save(GENERATED_GRAPHS / f"adj_geolayer_{percentage}_percent_{timestamp}.npy", adj_matrix)
     elif graph_type == 'regis_layer':
-        adj_matrix = generate_layer_constrained_adjacency_matrix(coordinates, df_piezo_columns, num_piezo, num_pump, num_prec, num_evap, num_river, layer_column='geolayer', percentage=percentage, n_piezo_connected = n_piezo_connected, n_pumps_connected = n_pumps_connected)
+        adj_matrix = generate_layer_constrained_adjacency_matrix(coordinates, df_piezo_columns, num_piezo, num_pump, num_prec, num_evap, num_river, layer_column='regis_layer', percentage=percentage, n_piezo_connected=n_piezo_connected, n_pumps_connected=n_pumps_connected, weight_mode=weight_mode)
         np.save(GENERATED_GRAPHS / f"adj_regis_{percentage}_percent_{timestamp}.npy", adj_matrix)
     elif graph_type == 'rf':
           if weight_mode == 'fixed':
