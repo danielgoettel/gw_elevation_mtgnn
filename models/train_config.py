@@ -2,7 +2,7 @@ def define_base_configuration():
     return {
         'synthetic_data': False,
         'percentage': 100,
-        'n_piezo_connected': 5,
+        'n_piezo_connected': 3,
         'W': 5,
         'gcn_true': True,
         'build_adj': False,  #ALWAYS FALSE
@@ -46,6 +46,7 @@ def define_base_configuration():
 
 # Define variations for each parameter (exclude 'in_dim' and 'out_dim')
 parameter_variations = {
+  'graph_type': ['geolayer', 'rf']
   #'feature_importance_multiplier' : [0.1],
   #'n_piezo_connected' : [4,6],
   #'n_pumps_connected' : [3],
