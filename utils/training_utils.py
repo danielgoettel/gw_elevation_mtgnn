@@ -143,7 +143,7 @@ def generate_model_filename(model_type, future_window, graph_type=None, **kwargs
         base_name += "_exclude_evap_precip"
 
     if kwargs.get('node_dropout'):
-        base_name += "_node_dropout"
+        base_name += f"_node_dropout_w{kwargs.get('node_dropout_warmup', 60)}"
 
     if kwargs.get('directed_graph'):
         base_name += "_directed"

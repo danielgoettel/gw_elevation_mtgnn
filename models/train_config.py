@@ -58,8 +58,9 @@ def define_base_configuration():
 
 # Define variations for each parameter (exclude 'in_dim' and 'out_dim')
 parameter_variations = {
-  'graph_type': ['geolayer', 'rf'],
-  'node_dropout': [True],
+  'graph_type': ['default', 'geolayer', 'rf'],
+  'node_dropout': [True, False],
+  'node_dropout_warmup': [30, 60],
   #'feature_importance_multiplier' : [0.1],
   #'n_piezo_connected' : [4,6],
   #'n_pumps_connected' : [3],
