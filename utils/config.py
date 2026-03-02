@@ -20,6 +20,9 @@ PIEZO_CSV_DIR = INPUT_DIR / "piezometers/csv/csv"
 PREPROCESSED_DIR = DATA_DIR / f"preprocessed_{EXPERIMENT}"
 SAVED_MODELS_DIR = BASE_PATH / f"saved_models_{EXPERIMENT}"
 TRAINING_RESULTS_DIR = BASE_PATH / f"training_results_{EXPERIMENT}"
+TRAINING_SUMMARIES = TRAINING_RESULTS_DIR / "Summaries"
+RUN_PLOTS_AND_RESULTS = TRAINING_RESULTS_DIR / "Individual_Run_Results"
+SCATTER_PLOTS = BASE_PATH / f"scatterplots_{EXPERIMENT}"
 
 # Metadata files
 PIEZO_METADATA = INPUT_DIR / "piezometers/piezometer_metadata.csv" #validated
@@ -33,11 +36,20 @@ EVAP_PATH = INPUT_DIR / "meteo_metadata_and_timeseries/evaporation.csv" #validat
 RIVER_PATH = INPUT_DIR / "river/river_daily.csv" #validated
 
 PIEZO_LAYER_INFORMATION = INPUT_DIR / "piezometers/piezometer_layer_information.csv"
+PUMP_DISTANCES = INPUT_DIR / "wells/wellfield_to_obswell_distances.csv"
 
 RANDOM_FOREST_TRAINING_DATA = INPUT_DIR / "rf_training_data.csv"
 
+# Directories — outputs (experiment-specific, continued)
+GENERATED_GRAPHS = BASE_PATH / f"generated_graphs_{EXPERIMENT}"
+
+# Pickle files for RF Training Importances
+RF_TRAINED_ALL = PREPROCESSED_DIR / "raw_importances.pkl"
+RF_TRAINED_PIEZOS_ONLY = PREPROCESSED_DIR / "raw_piezo_only_importances.pkl"
+
 # Output files
 ADJ_MATRIX_PATH = PREPROCESSED_DIR / "adj_matrix.pt"
+PYG_GRAPH_PATH = PREPROCESSED_DIR / "pyg_graph.pt"
 STATIC_FEATURES_PATH = PREPROCESSED_DIR / "static_features.pt"
 PROCESSED_DATA_FILE = PREPROCESSED_DIR / "processed_data.pkl"
 COLUMN_NAMES_REAL = PREPROCESSED_DIR / "column_names_real.txt"
