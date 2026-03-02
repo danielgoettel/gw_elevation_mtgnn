@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from torch.cuda.amp import GradScaler 
+from torch.amp import GradScaler
 from torch.amp import autocast
 import json
 
@@ -189,7 +189,7 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
  
     best_model_filename = None
     
-    scaler = GradScaler()
+    scaler = GradScaler('cuda')
 
     for future_window in range(1, F_w + 1):  # Gradually increasing the future window
         start_time_window = time.time()  # Start time for the current window
