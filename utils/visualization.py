@@ -600,6 +600,7 @@ def plot_adj_heatmap(
   col_start: int = 0,
   col_end: int = 211,
   output_dir=None,
+  title: str = None,
 ) -> go.Figure:
   """
   Create an interactive HTML heatmap of a submatrix slice of the adjacency matrix.
@@ -627,7 +628,7 @@ def plot_adj_heatmap(
       colorbar=dict(title='Weight')
   ))
   fig2.update_layout(
-      title=f'Adjacency Submatrix {row_start}:{row_end}, {col_start}:{col_end}',
+      title=title or f'Adjacency Submatrix {row_start}:{row_end}, {col_start}:{col_end}',
       xaxis_title='Column index',
       yaxis_title='Row index',
       width=550,
