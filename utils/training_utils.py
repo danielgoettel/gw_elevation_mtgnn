@@ -151,17 +151,19 @@ def generate_model_filename(model_type, future_window, graph_type=None, **kwargs
     return os.path.join(str(SAVED_MODELS_DIR), f"{base_name}.pt")
 
 
-def save_rmse_values(test_rmse, future_window, **config):
+def save_rmse_values(test_rmse, future_window, output_dir=None, **config):
     model_base_name = generate_model_filename(future_window=future_window, **config)
-    
     model_base_name = os.path.basename(model_base_name).replace('.pt', '')
-
-    os.makedirs(str(TRAINING_RESULTS_DIR), exist_ok=True)
-    rmse_filename = f"{model_base_name}_rmse_test.json"
-    rmse_filepath = os.path.join(str(TRAINING_RESULTS_DIR), rmse_filename)
 
     # Convert test_rmse to a list if it's not already one (e.g., if it's a numpy array)
     test_rmse_list = test_rmse if isinstance(test_rmse, list) else test_rmse.tolist()
+
+    if output_dir is not None:
+        rmse_filepath = os.path.join(str(output_dir), 'rmse_test.json')
+    else:
+        os.makedirs(str(TRAINING_RESULTS_DIR), exist_ok=True)
+        rmse_filename = f"{model_base_name}_rmse_test.json"
+        rmse_filepath = os.path.join(str(TRAINING_RESULTS_DIR), rmse_filename)
 
     # Directly save or overwrite the RMSE values
     with open(rmse_filepath, 'w') as f:

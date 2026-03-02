@@ -23,6 +23,7 @@ if IN_COLAB:
     SCATTER_PLOTS = DRIVE_OUTPUT / f"scatterplots_{EXPERIMENT}"
     SAVED_MODELS_DIR = DRIVE_OUTPUT / f"saved_models_{EXPERIMENT}"
     TRAINING_RESULTS_DIR = DRIVE_OUTPUT / f"training_results_{EXPERIMENT}"
+    OUTPUTS_DIR = DRIVE_OUTPUT / f"outputs_{EXPERIMENT}"
 else:
     INPUT_DIR = BASE_PATH / "data" / "input"
     PREPROCESSED_DIR = BASE_PATH / "data" / f"preprocessed_{EXPERIMENT}"
@@ -30,6 +31,7 @@ else:
     SCATTER_PLOTS = BASE_PATH / f"scatterplots_{EXPERIMENT}"
     SAVED_MODELS_DIR = BASE_PATH / f"saved_models_{EXPERIMENT}"
     TRAINING_RESULTS_DIR = BASE_PATH / f"training_results_{EXPERIMENT}"
+    OUTPUTS_DIR = BASE_PATH / f"outputs_{EXPERIMENT}"
 PIEZO_CSV_DIR = INPUT_DIR / "piezometers/csv/csv"
 TRAINING_SUMMARIES = TRAINING_RESULTS_DIR / "Summaries"
 RUN_PLOTS_AND_RESULTS = TRAINING_RESULTS_DIR / "Individual_Run_Results"

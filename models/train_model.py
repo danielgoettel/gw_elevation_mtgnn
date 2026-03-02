@@ -24,7 +24,7 @@ from utils.training_utils import prepare_combined_input, make_predictions, inver
 from utils.metrics import calculate_rmse_per_piezometer, calculate_rmse_per_piezometer_moria, print_mean_std
 from utils.visualization import plot_sequences, plot_sparsity_pattern, plot_comparison_sequence, plot_comparison_sequence_dual_y, plot_rmse_comparison, plot_rmse_3d_network, plot_adj_heatmap
 
-from config import PIEZO_LAYER_INFORMATION, RANDOM_FOREST_TRAINING_DATA, SCATTER_PLOTS, TRAINING_SUMMARIES, SAVED_MODELS_DIR, TRAINING_RESULTS_DIR, RUN_PLOTS_AND_RESULTS
+from config import PIEZO_LAYER_INFORMATION, RANDOM_FOREST_TRAINING_DATA, SCATTER_PLOTS, TRAINING_SUMMARIES, SAVED_MODELS_DIR, TRAINING_RESULTS_DIR, RUN_PLOTS_AND_RESULTS, OUTPUTS_DIR
 
 from train_config import define_base_configuration, parameter_variations
 
@@ -160,7 +160,8 @@ def compute_val_rmse_per_node(model, eval_loader, device, future_window, W,
 def train(model, optimizer, loss_function, device, num_epochs, train_data, val_data,
           train_mask, val_mask, df_piezo_columns, num_piezo, static_features, A_tilde,
           F_w, W, config, model_type,
-          edge_index=None, edge_type=None, edge_weight=None):
+          edge_index=None, edge_type=None, edge_weight=None,
+          run_dir=None):
     
     # Early stopping parameters
     early_stopping_patience = config.get('early_stopping_patience', 50)
@@ -210,9 +211,12 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
       
     
         # Model filename for the current future window
-        model_filename = generate_model_filename(future_window=future_window, **config)
+        if run_dir is not None:
+            model_filename = os.path.join(str(run_dir), f"model_fw{future_window}.pt")
+        else:
+            model_filename = generate_model_filename(future_window=future_window, **config)
         # Remove the .pt extension from the model name for the losses
-        model_name_for_losses = model_filename.split('/')[-1].replace('.pt', '')
+        model_name_for_losses = os.path.basename(model_filename).replace('.pt', '')
 
 
     
@@ -427,11 +431,13 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
             # print(f"Training for window {future_window} completed in {end_time_window - start_time_window:.2f} seconds")
                 
         
-            # Now you can use model_name_for_losses for naming your loss files
-            loss_filename = f'losses_{model_name_for_losses}.json'
-            os.makedirs(str(TRAINING_RESULTS_DIR), exist_ok=True)
-
-            loss_filename_filepath = os.path.join(str(TRAINING_RESULTS_DIR), loss_filename)
+            # Save losses JSON
+            if run_dir is not None:
+                loss_filename_filepath = os.path.join(str(run_dir), 'losses.json')
+            else:
+                loss_filename = f'losses_{model_name_for_losses}.json'
+                os.makedirs(str(TRAINING_RESULTS_DIR), exist_ok=True)
+                loss_filename_filepath = os.path.join(str(TRAINING_RESULTS_DIR), loss_filename)
             with open(loss_filename_filepath, 'w') as f:
                 json.dump(losses_dict, f, indent=4)
                 
@@ -524,12 +530,12 @@ def main(run_all=True):
     df_summary = pd.DataFrame(summaries)
 
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    os.makedirs(str(TRAINING_SUMMARIES), exist_ok=True)
-    df_summary.to_csv(TRAINING_SUMMARIES / f"summary_{ts}.csv", index=False)
-    print(f"→ Wrote run summary to summary_{ts}.csv")
+    os.makedirs(str(OUTPUTS_DIR), exist_ok=True)
+    df_summary.to_csv(OUTPUTS_DIR / f"summary_{ts}.csv", index=False)
+    print(f"→ Wrote run summary to {OUTPUTS_DIR / f'summary_{ts}.csv'}")
 
     # Append to persistent overall results table
-    overall_path = TRAINING_SUMMARIES / "overall_results.csv"
+    overall_path = OUTPUTS_DIR / "overall_results.csv"
     if overall_path.exists():
         df_existing = pd.read_csv(overall_path)
         df_combined = pd.concat([df_existing, df_summary], ignore_index=True)
@@ -547,12 +553,21 @@ def run_training_and_evaluation(config):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using {device} device.")
 
+    # Compute run output directory
+    F_w = config.get('F_w', 3)
+    model_base = os.path.basename(
+        generate_model_filename(future_window=F_w, **config)
+    ).replace('.pt', '')
+    run_dir = OUTPUTS_DIR / config['graph_type'] / model_base
+    os.makedirs(str(run_dir), exist_ok=True)
+    print(f"Run output directory: {run_dir}")
+
     # Assuming process_data.main() prepares and returns the necessary datasets and GNN data
     train_data, val_data, test_data, train_mask, val_mask, test_mask, df_piezo_columns, pump_columns, locations_no_missing, scaler, mean_gw_elevation = process_data.main(config['synthetic_data'])
     train_data.to_csv(RANDOM_FOREST_TRAINING_DATA)
     A_tilde, static_features, pyg_graph = gnn_data_prep.main(df_piezo_columns, pump_columns, locations_no_missing, config['graph_type'], config['percentage'] , config['n_piezo_connected'], config['feature_importance_multiplier'], config['n_pumps_connected'], config['weight_mode'], config['layer_constrain'], config['ext_data'], config['multiply_exo_weights'], directed_graph=config.get('directed_graph', False), mean_gw_elevation=mean_gw_elevation)
-    
-    ahm = plot_adj_heatmap(A_tilde)
+
+    ahm = plot_adj_heatmap(A_tilde, output_dir=run_dir)
      
     # plot_sparsity_pattern(A_tilde, markersize=10)
 
@@ -594,7 +609,8 @@ def run_training_and_evaluation(config):
           train_data=train_data, val_data=val_data, train_mask=train_mask, val_mask=val_mask,
           df_piezo_columns=df_piezo_columns, num_piezo=num_piezo, static_features=static_features,
           A_tilde=A_tilde, F_w=F_w, W=W, config=config, model_type=model_type,
-          edge_index=edge_index, edge_type=edge_type, edge_weight=edge_weight)
+          edge_index=edge_index, edge_type=edge_type, edge_weight=edge_weight,
+          run_dir=run_dir)
     if dropped_node_names is None:
         dropped_node_names = []
 
@@ -615,15 +631,15 @@ def run_training_and_evaluation(config):
 
     test_rmse_mean, test_rmse_std = print_mean_std(test_rmse, "Test RMSE")
 
-    save_rmse_values(test_rmse, future_window=F_w, **config)
+    save_rmse_values(test_rmse, future_window=F_w, output_dir=run_dir, **config)
 
     # Plotting Model 1 Predictions
     _, _, _, mask_seq_test = test_sample
     start_date_test = test_data.index[0] 
     # plot_sequences(test_input_, test_predicted_model_, test_target_, df_piezo_columns, 'Model Evaluation', start_date_test, model_labels=('Prediction', '', ''), mask = mask_seq_test)
-    color_dict_seq = plot_comparison_sequence(test_input_, test_predicted_model_, test_target_, start_date_test, df_piezo_columns, mask=mask_seq_test, selected_nodes=None)
-    
-    color_dict_dual = plot_comparison_sequence_dual_y(test_input_, test_predicted_model_, test_target_, start_date_test, mask_seq_test, test_rmse, df_piezo_columns )
+    color_dict_seq = plot_comparison_sequence(test_input_, test_predicted_model_, test_target_, start_date_test, df_piezo_columns, mask=mask_seq_test, selected_nodes=None, output_dir=run_dir)
+
+    color_dict_dual = plot_comparison_sequence_dual_y(test_input_, test_predicted_model_, test_target_, start_date_test, mask_seq_test, test_rmse, df_piezo_columns, output_dir=run_dir)
     combined_color_dict = {**color_dict_seq, **color_dict_dual}
 
   
@@ -661,8 +677,7 @@ def run_training_and_evaluation(config):
 
     try:
       scatter = plot_rmse_3d_network(rmse_df, title_str)
-      out_html = SCATTER_PLOTS / f"{title_str}_rmse3d.html"
-      scatter.write_html(out_html, include_plotlyjs='cdn')
+      scatter.write_html(str(run_dir / 'rmse3d.html'), include_plotlyjs='cdn')
     except Exception as e:
       print(f"Skipped 3D RMSE plot for {title_str}: {e}")
 

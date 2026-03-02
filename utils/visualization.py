@@ -155,7 +155,7 @@ def plot_sequences(input_seq, predicted_seq_model1, target_seq, df_piezo_columns
         
 from itertools import cycle
 
-def plot_comparison_sequence(input_seq, predicted_seq, target_seq, start_date, train_piezo_columns, mask=None, selected_nodes=None):
+def plot_comparison_sequence(input_seq, predicted_seq, target_seq, start_date, train_piezo_columns, mask=None, selected_nodes=None, output_dir=None):
     num_time_steps = input_seq.shape[0] + predicted_seq.shape[0]
     dates = pd.date_range(start=start_date, periods=num_time_steps, freq='W')
 
@@ -225,17 +225,18 @@ def plot_comparison_sequence(input_seq, predicted_seq, target_seq, start_date, t
     plt.legend(handles=legend_elements, loc='lower right', fontsize=12)
 
 
-    # Save the figure as a PDF in the current working directory
-    figure_directory = '.'  # Current directory
-    file_name = 'comparison_sequence.pdf'
-    plt.savefig(f'{figure_directory}/{file_name}', format='pdf', bbox_inches='tight')
-
+    # Save the figure as a PDF
+    if output_dir is not None:
+        save_path = Path(output_dir) / 'comparison_sequence.pdf'
+    else:
+        save_path = Path('.') / 'comparison_sequence.pdf'
+    plt.savefig(str(save_path), format='pdf', bbox_inches='tight')
 
     plt.show()
-    return color_dict  
+    return color_dict
 
 
-def plot_comparison_sequence_dual_y(input_seq, predicted_seq, target_seq, start_date, mask, test_rmse, train_piezo_columns ):
+def plot_comparison_sequence_dual_y(input_seq, predicted_seq, target_seq, start_date, mask, test_rmse, train_piezo_columns, output_dir=None):
     
     # Find the best (lowest) RMSE values
     best_rmse_values = np.sort(test_rmse)[:3]
@@ -329,13 +330,15 @@ def plot_comparison_sequence_dual_y(input_seq, predicted_seq, target_seq, start_
     ]
     plt.legend(handles=legend_elements, loc='lower right', fontsize=12)
 
-    # Save the figure as a PDF in the current working directory
-    figure_directory = '.'  # Current directory
-    file_name = 'comparison_sequence_best_worst.pdf'
-    plt.savefig(f'{figure_directory}/{file_name}', format='pdf', bbox_inches='tight')
+    # Save the figure as a PDF
+    if output_dir is not None:
+        save_path = Path(output_dir) / 'comparison_sequence_best_worst.pdf'
+    else:
+        save_path = Path('.') / 'comparison_sequence_best_worst.pdf'
+    plt.savefig(str(save_path), format='pdf', bbox_inches='tight')
 
     plt.show()
-    
+
     # Save the colors
     color_dict = {} 
     color_dict[best_piezometer] = color_best
@@ -596,7 +599,7 @@ def plot_adj_heatmap(
   row_end: int = 211,
   col_start: int = 0,
   col_end: int = 211,
-  #output_html: str = 'adj_heatmap.html'
+  output_dir=None,
 ) -> go.Figure:
   """
   Create an interactive HTML heatmap of a submatrix slice of the adjacency matrix.
@@ -634,7 +637,8 @@ def plot_adj_heatmap(
 
 
   # save to interactive HTML
-  #fig2.write_html(output_html, include_plotlyjs='cdn')
+  if output_dir is not None:
+      fig2.write_html(str(Path(output_dir) / 'adj_heatmap.html'), include_plotlyjs='cdn')
 
   fig2.show()
   return fig2

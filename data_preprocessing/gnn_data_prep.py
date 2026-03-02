@@ -25,23 +25,26 @@ from config import (
 def euclidean_distance(x1, y1, x2, y2):
     return np.sqrt((x2 - x1)**2 + (y2 - y1)**2)
 
-def get_n_closest_pumps_indices(n, pump_distances_file=PUMP_DISTANCES):
+def get_n_closest_pumps_indices(n, num_piezo, pump_distances_file=PUMP_DISTANCES):
     """
-    Reads a CSV of piezometer‐to‐pump distances and returns, for each piezometer,
-    the integer column indices of the n closest pumps.
+    Reads a CSV of piezometer-to-pump distances and returns, for each piezometer,
+    the integer column indices of the n closest pumps, offset by num_piezo so they
+    map to the correct node indices in the adjacency matrix.
 
     Parameters
     ----------
     n : int
         Number of closest pumps to find per piezometer.
+    num_piezo : int
+        Number of piezometers (used as offset for pump node indices).
     pump_distances_file : str
         Path to a CSV file (no index column) of shape (num_piezometers, num_pumps).
 
     Returns
     -------
     np.ndarray
-        Array of shape (num_piezometers, n) where row i contains the pump‐column
-        indices (0-based) of the n closest pumps to piezometer i.
+        Array of shape (num_piezometers, n) where row i contains the adjacency-matrix
+        indices of the n closest pumps to piezometer i.
     """
     # load raw distances; shape = (num_piezometers, num_pumps)
     dist_array = pd.read_csv(pump_distances_file, header=None).values
@@ -49,8 +52,8 @@ def get_n_closest_pumps_indices(n, pump_distances_file=PUMP_DISTANCES):
     # argsort each row to get pump indices in ascending distance order
     sorted_pump_indices = np.argsort(dist_array, axis=1)
 
-    # take the first n indices for each row
-    return sorted_pump_indices[:, :n] + 199 #add 200 for piezo offset.  
+    # take the first n indices for each row, offset by num_piezo
+    return sorted_pump_indices[:, :n] + num_piezo
 
 
 def build_same_layer_block(
@@ -219,7 +222,7 @@ def generate_complex_adjacency_matrix(all_coords, num_piezo, num_pump, num_prec,
 
     #Read pump distances
     pumps = pd.read_csv(PUMP_DISTANCES, header = 0, index_col = 0)
-    closest_pumps = get_n_closest_pumps_indices(n_pumps_connected, pump_distances_file=PUMP_DISTANCES) 
+    closest_pumps = get_n_closest_pumps_indices(n_pumps_connected, num_piezo, pump_distances_file=PUMP_DISTANCES) 
 
     # Connectivity logic
     for i in selected_indices:
@@ -284,7 +287,7 @@ def generate_layer_constrained_adjacency_matrix(
 
     #Read pump distances
     pumps = pd.read_csv(PUMP_DISTANCES, header = 0, index_col = 0)
-    closest_pumps = get_n_closest_pumps_indices(n_pumps_connected, pump_distances_file=PUMP_DISTANCES) 
+    closest_pumps = get_n_closest_pumps_indices(n_pumps_connected, num_piezo, pump_distances_file=PUMP_DISTANCES) 
 
     num_nodes = len(all_coords)
     adj_matrix = np.zeros((num_nodes, num_nodes))
@@ -410,7 +413,7 @@ def generate_layer_constrained_adjacency_matrix(
 
     # Read pump distances
     pumps = pd.read_csv(PUMP_DISTANCES, header=0, index_col=0)
-    closest_pumps = get_n_closest_pumps_indices(n_pumps_connected, pump_distances_file=PUMP_DISTANCES)
+    closest_pumps = get_n_closest_pumps_indices(n_pumps_connected, num_piezo, pump_distances_file=PUMP_DISTANCES)
 
     num_nodes = len(all_coords)
     adj_matrix = np.zeros((num_nodes, num_nodes))
@@ -494,6 +497,7 @@ def generate_fixed_layer_constrained_rf_adjacency_matrix_layer(
     # Read closest pumps for exogenous
     closest_pumps = get_n_closest_pumps_indices(
         n_pumps_connected,
+        num_piezo,
         pump_distances_file=PUMP_DISTANCES
     )
 
@@ -572,7 +576,7 @@ def generate_rf_adjacency_matrix(
 
     # Read pump distances
     pumps = pd.read_csv(PUMP_DISTANCES, header=0, index_col=0)
-    closest_pumps = get_n_closest_pumps_indices(n_pumps_connected, pump_distances_file=PUMP_DISTANCES)
+    closest_pumps = get_n_closest_pumps_indices(n_pumps_connected, num_piezo, pump_distances_file=PUMP_DISTANCES)
 
     # 1) Load your saved P×P importance matrix
     rf_feature_importance = joblib.load(RF_TRAINED_PIEZOS_ONLY)  # shape (P, P)
@@ -670,7 +674,7 @@ def generate_rf_adjacency_variable_weights_matrix_layer_constrained(
     dmat = pairwise_distances(all_coords)
 
     # read closest pumps
-    closest_pumps = get_n_closest_pumps_indices(n_pumps_connected, pump_distances_file=PUMP_DISTANCES)
+    closest_pumps = get_n_closest_pumps_indices(n_pumps_connected, num_piezo, pump_distances_file=PUMP_DISTANCES)
 
     # piezo→piezo: top-k within same layer
     for i in range(num_piezo):
@@ -786,7 +790,7 @@ def generate_rf_adjacency_variable_weights_matrix(
 
     # Read pump distances
     pumps = pd.read_csv(PUMP_DISTANCES, header=0, index_col=0)
-    closest_pumps = get_n_closest_pumps_indices(n_pumps_connected, pump_distances_file=PUMP_DISTANCES)
+    closest_pumps = get_n_closest_pumps_indices(n_pumps_connected, num_piezo, pump_distances_file=PUMP_DISTANCES)
 
     # piezo→piezo top‐k
     for i in range(num_piezo):
