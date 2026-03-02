@@ -35,13 +35,13 @@ def define_base_configuration():
 
         # Training parameters
         'learning_rate': 0.001,
-        'num_epochs': 200,
-        'batch_size': 32,
+        'num_epochs': 100,
+        'batch_size': 128,
         'F_w': 1,
         'model_type': 'MTGNN',  # Options: 'MTGNN', 'MultigraphGNN', 'LSTM'
-        'early_stopping_patience': 30,
+        'early_stopping_patience': 15,
         'min_delta': 0.001,
-        'scheduler_patience': 10,
+        'scheduler_patience': 5,
 
         # MultigraphGNN parameters (only used when model_type='MultigraphGNN')
         'num_relations': 5,
