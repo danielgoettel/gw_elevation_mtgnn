@@ -703,11 +703,13 @@ def run_training_and_evaluation(config):
     # Load layer info
     layer_info = pd.read_csv(PIEZO_LAYER_INFORMATION).rename(columns=lambda x: x.strip())
 
-    # Merge with RMSE values
+    # Merge with RMSE values, excluding dropped nodes
     rmse_df = pd.DataFrame({
         'name': df_piezo_columns,
         'rmse': test_rmse
     })
+    if dropped_node_names:
+        rmse_df = rmse_df[~rmse_df['name'].isin(dropped_node_names)].reset_index(drop=True)
     merged = rmse_df.merge(layer_info, on='name', how='left')
 
     # Build title from all relevant config options
