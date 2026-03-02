@@ -466,11 +466,17 @@ def plot_rmse_3d_network(
     N = len(filtered_idx)
 
     # 5) Precompute raw edges and their weights
+    #    Detect directed graph: if adjacency matrix is asymmetric
+    is_directed = not np.allclose(A, A.T)
+
     edge_data = []
     group_col = color_columns[0] if color_columns else None
     for u in range(N):
         i = filtered_idx[u]
-        for v in range(u+1, N):
+        v_range = range(N) if is_directed else range(u+1, N)
+        for v in v_range:
+            if is_directed and u == v:
+                continue
             j = filtered_idx[v]
             w = A[i, j]
             if w > 0:
@@ -507,7 +513,35 @@ def plot_rmse_3d_network(
             showlegend=False          # only the node trace shows in the legend
         ))
 
-    #append node traces
+    # 6b) For directed graphs, add arrowhead cones near the destination end
+    if is_directed and edge_data:
+        arrow_x, arrow_y, arrow_z = [], [], []
+        arrow_u, arrow_v, arrow_w = [], [], []
+        for e in edge_data:
+            (x0, y0, z0), (x1, y1, z1) = e["ends"]
+            # Place arrowhead at 75% along the edge
+            frac = 0.75
+            arrow_x.append(x0 + frac * (x1 - x0))
+            arrow_y.append(y0 + frac * (y1 - y0))
+            arrow_z.append(z0 + frac * (z1 - z0))
+            arrow_u.append(x1 - x0)
+            arrow_v.append(y1 - y0)
+            arrow_w.append(z1 - z0)
+
+        traces.append(go.Cone(
+            x=arrow_x, y=arrow_y, z=arrow_z,
+            u=arrow_u, v=arrow_v, w=arrow_w,
+            sizemode="absolute",
+            sizeref=80,
+            anchor="tip",
+            showscale=False,
+            colorscale=[[0, 'black'], [1, 'black']],
+            name=None,
+            showlegend=False,
+            hoverinfo='skip'
+        ))
+
+    # append node traces
     for col in color_columns:
         for val in sorted(df[col].unique()):
             mask = df[col] == val

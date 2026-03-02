@@ -549,6 +549,7 @@ def main(run_all=True):
             "F_w":                      config['F_w'],
             "Node Dropout":             config.get('node_dropout', False),
             "Dropped Nodes":            ", ".join(dropped_node_names) if dropped_node_names else "",
+            "Directed Graph":           config.get('directed_graph', False),
             "Overall RMSE Mean":        test_rmse_mean,
             "Overall RMSE StdDev":      test_rmse_std,
         }
@@ -591,9 +592,9 @@ def run_training_and_evaluation(config):
     print(f"Using {device} device.")
 
     # Assuming process_data.main() prepares and returns the necessary datasets and GNN data
-    train_data, val_data, test_data, train_mask, val_mask, test_mask, df_piezo_columns, pump_columns, locations_no_missing, scaler = process_data.main(config['synthetic_data'])
+    train_data, val_data, test_data, train_mask, val_mask, test_mask, df_piezo_columns, pump_columns, locations_no_missing, scaler, mean_gw_elevation = process_data.main(config['synthetic_data'])
     train_data.to_csv(RANDOM_FOREST_TRAINING_DATA)
-    A_tilde, static_features, pyg_graph = gnn_data_prep.main(df_piezo_columns, pump_columns, locations_no_missing, config['graph_type'], config['percentage'] , config['n_piezo_connected'], config['feature_importance_multiplier'], config['n_pumps_connected'], config['weight_mode'], config['layer_constrain'], config['ext_data'], config['multiply_exo_weights'])
+    A_tilde, static_features, pyg_graph = gnn_data_prep.main(df_piezo_columns, pump_columns, locations_no_missing, config['graph_type'], config['percentage'] , config['n_piezo_connected'], config['feature_importance_multiplier'], config['n_pumps_connected'], config['weight_mode'], config['layer_constrain'], config['ext_data'], config['multiply_exo_weights'], directed_graph=config.get('directed_graph', False), mean_gw_elevation=mean_gw_elevation)
     
     ahm = plot_adj_heatmap(A_tilde)
      

@@ -47,6 +47,9 @@ def define_base_configuration():
         'num_relations': 5,
         'rgcn_num_bases': None,  # basis decomposition (None = no decomposition)
 
+        # Directed graph — piezo-piezo edges flow from higher to lower GW elevation
+        'directed_graph': False,
+
         # Dynamic node dropout — isolate high-RMSE nodes mid-training
         'node_dropout': False,
         'node_dropout_warmup': 60,          # epochs before evaluating for dropout

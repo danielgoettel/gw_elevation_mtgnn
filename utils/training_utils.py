@@ -145,6 +145,9 @@ def generate_model_filename(model_type, future_window, graph_type=None, **kwargs
     if kwargs.get('node_dropout'):
         base_name += "_node_dropout"
 
+    if kwargs.get('directed_graph'):
+        base_name += "_directed"
+
     return os.path.join(str(SAVED_MODELS_DIR), f"{base_name}.pt")
 
 

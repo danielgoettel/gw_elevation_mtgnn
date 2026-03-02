@@ -245,7 +245,7 @@ def generate_complex_adjacency_matrix(all_coords, num_piezo, num_pump, num_prec,
             adj_matrix[i, river_indices] = 0.5
 
     # Symmetrize the matrix for undirected connections
-    adj_matrix = adj_matrix + adj_matrix.T
+    adj_matrix = np.maximum(adj_matrix, adj_matrix.T)
 
     return adj_matrix
 
@@ -373,10 +373,10 @@ def generate_layer_constrained_adjacency_matrix(
 
             
             adj_matrix[i, river_idxs] = 0.5
-  
+
 
     # Symmetrize the matrix for undirected connections
-    adj_matrix = adj_matrix + adj_matrix.T
+    adj_matrix = np.maximum(adj_matrix, adj_matrix.T)
 
     return adj_matrix
 """
@@ -925,7 +925,7 @@ def load_and_concatenate_metadata(piezo_metadata_path, pump_metadata_path, evap_
     )
 
 
-def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, percentage=None, n_piezo_connected=3, feature_importance_multiplier = None, n_pumps_connected = 4, weight_mode = 'fixed', same_layer = False, same_layer_kwargs = None, ext_data = True, multiply_exo_weights = False):
+def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, percentage=None, n_piezo_connected=3, feature_importance_multiplier = None, n_pumps_connected = 4, weight_mode = 'fixed', same_layer = False, same_layer_kwargs = None, ext_data = True, multiply_exo_weights = False, directed_graph=False, mean_gw_elevation=None):
     # Paths to the metadata files (update these paths according to your folder structure)
 
     metadata_path = PIEZO_METADATA
@@ -997,6 +997,12 @@ def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, perce
     else:
         raise ValueError(f"Unknown graph_type: {graph_type}")
 
+    # Apply directional mask: keep piezo-piezo edges only from higher to lower GW elevation
+    if directed_graph and mean_gw_elevation is not None:
+        elev_mask = mean_gw_elevation[:, None] >= mean_gw_elevation[None, :]  # (num_piezo, num_piezo)
+        adj_matrix[:num_piezo, :num_piezo] *= elev_mask
+        n_directed = np.count_nonzero(adj_matrix[:num_piezo, :num_piezo])
+        print(f"Directed graph: {n_directed} piezo-piezo edges (higher to lower GW elevation)")
 
     base_data_path = PREPROCESSED_DIR
 
