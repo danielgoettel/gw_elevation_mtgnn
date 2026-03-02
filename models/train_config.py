@@ -3,7 +3,7 @@ def define_base_configuration():
         'synthetic_data': False,
         'percentage': 100,
         'n_piezo_connected': 3,
-        'W': 7,
+        'W': 35,
         'gcn_true': True,
         'build_adj': False,  #ALWAYS FALSE
         'gcn_depth': 4,
