@@ -975,30 +975,36 @@ def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, perce
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     GENERATED_GRAPHS.mkdir(parents=True, exist_ok=True)
 
+    # Descriptive graph filename parts shared by all types
+    graph_tag = (f"adj_{graph_type}_WM_{weight_mode}"
+                 f"_piezo_{n_piezo_connected}_pumps_{n_pumps_connected}")
+    if same_layer:
+        graph_tag += "_samelayer"
+    if directed_graph:
+        graph_tag += "_directed"
+    graph_tag += f"_{timestamp}"
+
     if graph_type == 'default':
         adj_matrix = generate_complex_adjacency_matrix(coordinates, num_piezo, num_pump, num_prec, num_evap, num_river, percentage, n_piezo_connected, n_pumps_connected)
-        np.save(GENERATED_GRAPHS / f"adj_default_{percentage}_percent_{timestamp}.npy", adj_matrix)
+        np.save(GENERATED_GRAPHS / f"{graph_tag}.npy", adj_matrix)
     elif graph_type == 'geolayer':
         adj_matrix = generate_layer_constrained_adjacency_matrix(coordinates, df_piezo_columns, num_piezo, num_pump, num_prec, num_evap, num_river, layer_column='geolayer', percentage=percentage, n_piezo_connected=n_piezo_connected, n_pumps_connected=n_pumps_connected, weight_mode=weight_mode)
-        np.save(GENERATED_GRAPHS / f"adj_geolayer_{percentage}_percent_{timestamp}.npy", adj_matrix)
+        np.save(GENERATED_GRAPHS / f"{graph_tag}.npy", adj_matrix)
     elif graph_type == 'regis_layer':
         adj_matrix = generate_layer_constrained_adjacency_matrix(coordinates, df_piezo_columns, num_piezo, num_pump, num_prec, num_evap, num_river, layer_column='regis_layer', percentage=percentage, n_piezo_connected=n_piezo_connected, n_pumps_connected=n_pumps_connected, weight_mode=weight_mode)
-        np.save(GENERATED_GRAPHS / f"adj_regis_{percentage}_percent_{timestamp}.npy", adj_matrix)
+        np.save(GENERATED_GRAPHS / f"{graph_tag}.npy", adj_matrix)
     elif graph_type == 'rf':
           if weight_mode == 'fixed':
             if same_layer:
               adj_matrix = generate_fixed_layer_constrained_rf_adjacency_matrix_layer(df_piezo_columns, coordinates, num_piezo, num_pump, num_prec, num_evap, num_river, n_piezo_connected, n_pumps_connected)
-              np.save(GENERATED_GRAPHS / f"adj_rf_fixed_layer_constrained_npumps:{n_pumps_connected}_n_piezo:{n_piezo_connected}_{timestamp}.npy", adj_matrix)
             else:
               adj_matrix = generate_rf_adjacency_matrix(df_piezo_columns, coordinates, num_piezo, num_pump, num_prec, num_evap, num_river, n_piezo_connected, n_pumps_connected)
-              np.save(GENERATED_GRAPHS / f"adj_rf_{n_pumps_connected}_n_piezo:{n_piezo_connected}_{timestamp}.npy", adj_matrix)
           if weight_mode == 'variable':
             if same_layer:
-              adj_matrix =  generate_rf_adjacency_variable_weights_matrix_layer_constrained(df_piezo_columns, coordinates, num_piezo, num_pump, num_prec, num_evap, num_river, n_top_connections= n_piezo_connected, n_pumps_connected = n_pumps_connected,feature_importance_multiplier = feature_importance_multiplier, multiply_exo_weights = multiply_exo_weights)
-              np.save(GENERATED_GRAPHS / f"adj_rf_var_layer_constrained_{n_pumps_connected}_n_piezo:{n_piezo_connected}_{timestamp}.npy", adj_matrix)
-            else: 
-              adj_matrix =  generate_rf_adjacency_variable_weights_matrix(df_piezo_columns, coordinates, num_piezo, num_pump, num_prec, num_evap, num_river, n_top_connections= n_piezo_connected, n_pumps_connected = n_pumps_connected,feature_importance_multiplier = feature_importance_multiplier, multiply_exo_weights = multiply_exo_weights)
-              np.save(GENERATED_GRAPHS / f"adj_rf_var_weights_{n_pumps_connected}_n_piezo:{n_piezo_connected}_{timestamp}", adj_matrix)
+              adj_matrix = generate_rf_adjacency_variable_weights_matrix_layer_constrained(df_piezo_columns, coordinates, num_piezo, num_pump, num_prec, num_evap, num_river, n_top_connections=n_piezo_connected, n_pumps_connected=n_pumps_connected, feature_importance_multiplier=feature_importance_multiplier, multiply_exo_weights=multiply_exo_weights)
+            else:
+              adj_matrix = generate_rf_adjacency_variable_weights_matrix(df_piezo_columns, coordinates, num_piezo, num_pump, num_prec, num_evap, num_river, n_top_connections=n_piezo_connected, n_pumps_connected=n_pumps_connected, feature_importance_multiplier=feature_importance_multiplier, multiply_exo_weights=multiply_exo_weights)
+          np.save(GENERATED_GRAPHS / f"{graph_tag}.npy", adj_matrix)
 
     else:
         raise ValueError(f"Unknown graph_type: {graph_type}")
