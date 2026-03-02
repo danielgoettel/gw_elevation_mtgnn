@@ -533,22 +533,21 @@ def main(run_all=True):
         # Record the result
         record_result(config, test_rmse_mean, test_rmse_std)
 
+        # Save results incrementally after each run
+        os.makedirs(str(OUTPUTS_DIR), exist_ok=True)
+        overall_path = OUTPUTS_DIR / "overall_results.csv"
+        df_row = pd.DataFrame([row])
+        if overall_path.exists():
+            df_row.to_csv(overall_path, mode='a', header=False, index=False)
+        else:
+            df_row.to_csv(overall_path, index=False)
+        print(f"→ Appended run {i} to {overall_path}")
+
+    # Also write a timestamped summary of this session
     df_summary = pd.DataFrame(summaries)
-
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    os.makedirs(str(OUTPUTS_DIR), exist_ok=True)
     df_summary.to_csv(OUTPUTS_DIR / f"summary_{ts}.csv", index=False)
-    print(f"→ Wrote run summary to {OUTPUTS_DIR / f'summary_{ts}.csv'}")
-
-    # Append to persistent overall results table
-    overall_path = OUTPUTS_DIR / "overall_results.csv"
-    if overall_path.exists():
-        df_existing = pd.read_csv(overall_path)
-        df_combined = pd.concat([df_existing, df_summary], ignore_index=True)
-    else:
-        df_combined = df_summary
-    df_combined.to_csv(overall_path, index=False)
-    print(f"→ Updated overall results ({len(df_combined)} total rows) at {overall_path}")
+    print(f"→ Wrote session summary to {OUTPUTS_DIR / f'summary_{ts}.csv'}")
 
     if run_all:
         analyze_results()
@@ -569,7 +568,10 @@ def run_training_and_evaluation(config):
     print(f"Run output directory: {run_dir}")
 
     # Assuming process_data.main() prepares and returns the necessary datasets and GNN data
-    train_data, val_data, test_data, train_mask, val_mask, test_mask, df_piezo_columns, pump_columns, locations_no_missing, scaler, mean_gw_elevation = process_data.main(config['synthetic_data'])
+    train_data, val_data, test_data, train_mask, val_mask, test_mask, df_piezo_columns, pump_columns, locations_no_missing, scaler, mean_gw_elevation = process_data.main(
+        config['synthetic_data'],
+        resampling_freq=config.get('resampling_freq', 'W')
+    )
     train_data.to_csv(RANDOM_FOREST_TRAINING_DATA)
     A_tilde, static_features, pyg_graph = gnn_data_prep.main(df_piezo_columns, pump_columns, locations_no_missing, config['graph_type'], config['percentage'] , config['n_piezo_connected'], config['feature_importance_multiplier'], config['n_pumps_connected'], config['weight_mode'], config['layer_constrain'], config['ext_data'], config['multiply_exo_weights'], directed_graph=config.get('directed_graph', False), mean_gw_elevation=mean_gw_elevation)
 
@@ -648,11 +650,17 @@ def run_training_and_evaluation(config):
 
     # Plotting Model 1 Predictions
     _, _, _, mask_seq_test = test_sample
-    start_date_test = test_data.index[0] 
-    # plot_sequences(test_input_, test_predicted_model_, test_target_, df_piezo_columns, 'Model Evaluation', start_date_test, model_labels=('Prediction', '', ''), mask = mask_seq_test)
-    color_dict_seq = plot_comparison_sequence(test_input_, test_predicted_model_, test_target_, start_date_test, df_piezo_columns, mask=mask_seq_test, selected_nodes=None, output_dir=run_dir)
+    start_date_test = test_data.index[0]
 
-    color_dict_dual = plot_comparison_sequence_dual_y(test_input_, test_predicted_model_, test_target_, start_date_test, mask_seq_test, test_rmse, df_piezo_columns, output_dir=run_dir)
+    # Determine time frequency for plot x-axes
+    plot_freq = config.get('resampling_freq', 'W')
+    if plot_freq is None:
+        plot_freq = pd.infer_freq(test_data.index) or '3h'
+
+    # plot_sequences(test_input_, test_predicted_model_, test_target_, df_piezo_columns, 'Model Evaluation', start_date_test, model_labels=('Prediction', '', ''), mask = mask_seq_test)
+    color_dict_seq = plot_comparison_sequence(test_input_, test_predicted_model_, test_target_, start_date_test, df_piezo_columns, mask=mask_seq_test, selected_nodes=None, output_dir=run_dir, freq=plot_freq)
+
+    color_dict_dual = plot_comparison_sequence_dual_y(test_input_, test_predicted_model_, test_target_, start_date_test, mask_seq_test, test_rmse, df_piezo_columns, output_dir=run_dir, freq=plot_freq)
     combined_color_dict = {**color_dict_seq, **color_dict_dual}
 
   

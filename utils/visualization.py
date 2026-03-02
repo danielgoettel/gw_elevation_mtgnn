@@ -111,9 +111,9 @@ def apply_mask(data, mask):
     return masked_data
 
 
-def plot_sequences(input_seq, predicted_seq_model1, target_seq, df_piezo_columns, title_prefix, start_date, predicted_seq_model2=None, predicted_seq_model3=None, model_labels=('Prediction Model 1', 'Prediction Model 2', 'Prediction Model 3'), mask=None, selected_nodes=None):
+def plot_sequences(input_seq, predicted_seq_model1, target_seq, df_piezo_columns, title_prefix, start_date, predicted_seq_model2=None, predicted_seq_model3=None, model_labels=('Prediction Model 1', 'Prediction Model 2', 'Prediction Model 3'), mask=None, selected_nodes=None, freq='W'):
     num_time_steps = input_seq.shape[0] + predicted_seq_model1.shape[0]
-    dates = pd.date_range(start=start_date, periods=num_time_steps, freq='W')
+    dates = pd.date_range(start=start_date, periods=num_time_steps, freq=freq)
 
     if mask is not None:
         predicted_seq_model1 = apply_mask(predicted_seq_model1, mask)
@@ -155,9 +155,9 @@ def plot_sequences(input_seq, predicted_seq_model1, target_seq, df_piezo_columns
         
 from itertools import cycle
 
-def plot_comparison_sequence(input_seq, predicted_seq, target_seq, start_date, train_piezo_columns, mask=None, selected_nodes=None, output_dir=None):
+def plot_comparison_sequence(input_seq, predicted_seq, target_seq, start_date, train_piezo_columns, mask=None, selected_nodes=None, output_dir=None, freq='W'):
     num_time_steps = input_seq.shape[0] + predicted_seq.shape[0]
-    dates = pd.date_range(start=start_date, periods=num_time_steps, freq='W')
+    dates = pd.date_range(start=start_date, periods=num_time_steps, freq=freq)
 
     if mask is not None:
         # predicted_seq = apply_mask(predicted_seq, mask)
@@ -236,8 +236,8 @@ def plot_comparison_sequence(input_seq, predicted_seq, target_seq, start_date, t
     return color_dict
 
 
-def plot_comparison_sequence_dual_y(input_seq, predicted_seq, target_seq, start_date, mask, test_rmse, train_piezo_columns, output_dir=None):
-    
+def plot_comparison_sequence_dual_y(input_seq, predicted_seq, target_seq, start_date, mask, test_rmse, train_piezo_columns, output_dir=None, freq='W'):
+
     # Find the best (lowest) RMSE values
     best_rmse_values = np.sort(test_rmse)[:3]
     
@@ -269,12 +269,12 @@ def plot_comparison_sequence_dual_y(input_seq, predicted_seq, target_seq, start_
 
 
     num_time_steps = input_seq.shape[0] + predicted_seq.shape[0]
-    dates = pd.date_range(start=start_date, periods=num_time_steps, freq='W')
+    dates = pd.date_range(start=start_date, periods=num_time_steps, freq=freq)
 
     if mask is not None:
         # predicted_seq = apply_mask(predicted_seq, mask)
         target_seq = apply_mask(target_seq, mask)
-        
+
 
     selected_nodes = []
 

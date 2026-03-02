@@ -54,6 +54,9 @@ def define_base_configuration():
         'node_dropout': False,
         'node_dropout_warmup': 60,          # epochs before evaluating for dropout
         'node_dropout_sd_threshold': 3.0,   # drop nodes with RMSE > mean + threshold * SD
+
+        # Data resampling — 'W' for weekly, None for native 3-hourly
+        'resampling_freq': 'W',
     }
 
 # Define variations for each parameter (exclude 'in_dim' and 'out_dim')

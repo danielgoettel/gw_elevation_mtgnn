@@ -159,8 +159,19 @@ def load_data(base_data_path, config):
             return data
     except FileNotFoundError:
         print("Processed data file not found. Processing data.")
-    
+
     return None
+
+
+def load_data_by_path(filepath):
+    """Load pickled data from an explicit file path, or return None."""
+    try:
+        with open(filepath, 'rb') as f:
+            print(f"Loading data from {filepath}")
+            return pickle.load(f)
+    except FileNotFoundError:
+        print(f"Cache not found at {filepath}. Processing data.")
+        return None
 
 
 
@@ -319,6 +330,12 @@ def split_and_normalize_data(df_piezo, missing_data_mask, external_data, config)
     # Combine piezometer data with external data for processing
     combined_data = pd.concat([df_piezo] + list(external_data), axis=1)
 
+    # Forward-fill external columns to handle daily→sub-daily gaps
+    ext_cols = [c for c in combined_data.columns if c not in df_piezo.columns]
+    combined_data[ext_cols] = combined_data[ext_cols].ffill()
+    combined_data = combined_data.dropna()
+    missing_data_mask = missing_data_mask.loc[combined_data.index]
+
     test_val_size = 0.2
     # Split data into train, validation, and test sets initially
     train_data, temp_data = train_test_split(combined_data, test_size=test_val_size, random_state=42, shuffle=False)
@@ -353,19 +370,21 @@ def define_configuration(synthetic_data):
 
 
 
-def main(synthetic_data = False):
+def main(synthetic_data=False, resampling_freq='W'):
     config = define_configuration(synthetic_data)
+    config['resampling_freq'] = resampling_freq  # override from train_config
 
     base_data_path = PREPROCESSED_DIR
     data_path = INPUT_DIR
-    
+
     # File paths for saving/loading processed data and configuration hash
-    # Adjust file paths based on whether data is synthetic
+    # Include freq in filename so weekly and raw caches don't collide
     data_type_prefix = "_synthetic" if config['synthetic_data'] else ""
-    processed_data_filepath = base_data_path / f'processed_data{data_type_prefix}.pkl'
+    freq_tag = resampling_freq if resampling_freq else "raw"
+    processed_data_filepath = base_data_path / f'processed_data{data_type_prefix}_{freq_tag}.pkl'
     config_hash_filepath = base_data_path / f'config_hash{data_type_prefix}.pkl'
 
-    data = load_data(base_data_path, config)
+    data = load_data_by_path(processed_data_filepath)
 
     common_start_date = pd.Timestamp('2008-01-01') if config['synthetic_data'] else pd.Timestamp('2004-01-01')
     
