@@ -330,9 +330,11 @@ def split_and_normalize_data(df_piezo, missing_data_mask, external_data, config)
     # Combine piezometer data with external data for processing
     combined_data = pd.concat([df_piezo] + list(external_data), axis=1)
 
-    # Forward-fill external columns to handle daily→sub-daily gaps
+    # Interpolate external columns to handle daily→sub-daily gaps
+    # Linear interpolation is more physically realistic than forward-fill
     ext_cols = [c for c in combined_data.columns if c not in df_piezo.columns]
-    combined_data[ext_cols] = combined_data[ext_cols].ffill()
+    combined_data[ext_cols] = combined_data[ext_cols].interpolate(method='linear')
+    combined_data[ext_cols] = combined_data[ext_cols].ffill().bfill()  # handle edges
     combined_data = combined_data.dropna()
     missing_data_mask = missing_data_mask.loc[combined_data.index]
 
