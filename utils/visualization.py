@@ -627,14 +627,20 @@ def plot_adj_heatmap(
       colorscale='Viridis',
       colorbar=dict(title='Weight')
   ))
+  display_title = title or f'Adjacency Submatrix {row_start}:{row_end}, {col_start}:{col_end}'
   fig2.update_layout(
-      title=title or f'Adjacency Submatrix {row_start}:{row_end}, {col_start}:{col_end}',
+      title=dict(
+          text=display_title,
+          font=dict(size=11),
+          x=0.5,
+          xanchor='center',
+      ),
       xaxis_title='Column index',
       yaxis_title='Row index',
-      width=550,
-      height=400,
-      margin=dict(l=50, r=50, t=50, b=50)
-)
+      width=600,
+      height=420,
+      margin=dict(l=50, r=50, t=70, b=50)
+  )
 
 
   # save to interactive HTML
