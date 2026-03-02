@@ -451,67 +451,23 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
     return dropped_node_names
 
 
-"""
 def generate_configurations():
+    """Generate configs: base config + Cartesian product of all parameter_variations."""
     base_config = define_base_configuration()
-    # get all the parameter names and their variation lists
     params = list(parameter_variations.keys())
     variations = [parameter_variations[p] for p in params]
 
-    configs = []
+    if not params:
+        return [base_config]
 
-    configs.append(base_config)
-
-    # loop over every tuple in the Cartesian product of variation-lists
+    configs = [base_config]
     for combo in itertools.product(*variations):
         cfg = base_config.copy()
-        # assign each parameter its value from this combo
         for p, v in zip(params, combo):
             cfg[p] = v
         configs.append(cfg)
 
     return configs
-"""
-
-
-
-def generate_configurations():
-    base_config = define_base_configuration()
-    configs = [base_config]  # Start with the base configuration
-    
-    # Iterate over each parameter and its variations
-    for param, variations in parameter_variations.items():
-        for variation in variations:
-            new_config = base_config.copy()
-            new_config[param] = variation
-            configs.append(new_config)
-    
-    return configs
-
-"""
-def generate_all_configurations():
-    base_config = define_base_configuration()
-    configs = []
-
-    # pull out the keys and the list of lists of values
-    keys = list(parameter_variations.keys())
-    value_lists = [parameter_variations[k] for k in keys]
-
-    # if there are no variations defined, just return the base
-    if not keys:
-        return [base_config]
-
-    # for every tuple of one choice per parameter…
-    for combo in itertools.product(*value_lists):
-        cfg = copy.deepcopy(base_config)
-        # assign each key its chosen value
-        for k, v in zip(keys, combo):
-            cfg[k] = v
-        configs.append(cfg)
-
-    # optionally include the pure base config as well:
-    return [base_config] + configs
-"""
 
 def main(run_all=True):
 
@@ -682,12 +638,26 @@ def run_training_and_evaluation(config):
     })
     merged = rmse_df.merge(layer_info, on='name', how='left')
 
-    # right before you call plot_rmse_3d_network:
-    title_str = (
-        f"{model_type} | graph={config['graph_type']} | "
-        f"topo={config['n_piezo_connected']} | pumps={config['n_pumps_connected']} |  Evap and Precip Removed = {config['exclude_evap_precip']} |perturb weights = {config['perturb_weights']}"
-        #weight_mode={config['weight_mode']} | multiply_exo_weights={config['multiply_exo_weights']} "
-    )
+    # Build title from all relevant config options
+    title_parts = [
+        f"{model_type}",
+        f"graph={config['graph_type']}",
+        f"topo={config['n_piezo_connected']}",
+        f"pumps={config['n_pumps_connected']}",
+        f"W={config['W']}",
+        f"weight_mode={config['weight_mode']}",
+    ]
+    if config.get('exclude_evap_precip'):
+        title_parts.append(f"exclude_evap_precip={config['exclude_evap_precip']}")
+    if config.get('perturb_weights'):
+        title_parts.append("perturb_weights")
+    if config.get('multiply_exo_weights'):
+        title_parts.append("multiply_exo_weights")
+    if config.get('directed_graph'):
+        title_parts.append("directed")
+    if config.get('node_dropout'):
+        title_parts.append(f"node_dropout(warmup={config.get('node_dropout_warmup')}, sd={config.get('node_dropout_sd_threshold')})")
+    title_str = " | ".join(title_parts)
 
     try:
       scatter = plot_rmse_3d_network(rmse_df, title_str)
