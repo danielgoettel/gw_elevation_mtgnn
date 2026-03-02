@@ -175,12 +175,13 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
     # Learning rate scheduler setup
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=config.get('scheduler_patience', 10))
     
-    # Create output directories if they don't exist
-    os.makedirs(str(SAVED_MODELS_DIR), exist_ok=True)
-    os.makedirs(str(TRAINING_RESULTS_DIR), exist_ok=True)
-    os.makedirs(str(TRAINING_SUMMARIES), exist_ok=True)
-    os.makedirs(str(RUN_PLOTS_AND_RESULTS), exist_ok=True)
-    os.makedirs(str(SCATTER_PLOTS), exist_ok=True)
+    # Create output directories — only create legacy dirs when run_dir is not used
+    if run_dir is None:
+        os.makedirs(str(SAVED_MODELS_DIR), exist_ok=True)
+        os.makedirs(str(TRAINING_RESULTS_DIR), exist_ok=True)
+        os.makedirs(str(TRAINING_SUMMARIES), exist_ok=True)
+        os.makedirs(str(RUN_PLOTS_AND_RESULTS), exist_ok=True)
+        os.makedirs(str(SCATTER_PLOTS), exist_ok=True)
     os.makedirs("failed_runs", exist_ok=True)
     failed_runs_filepath = "failed_runs/failed_models.txt"
 
@@ -479,9 +480,14 @@ def main(run_all=True):
 
     summaries = []
 
+    # Debug: confirm the loaded code and config
+    print(f"[DEBUG] OUTPUTS_DIR = {OUTPUTS_DIR}")
+    print(f"[DEBUG] parameter_variations = {parameter_variations}")
+
     configs = generate_configurations()
     base_config = configs[0]  # The first configuration is the base configuration
     total_runs = len(configs) if run_all else 1
+    print(f"[DEBUG] Total configurations to run: {total_runs} (run_all={run_all})")
 
 
 
