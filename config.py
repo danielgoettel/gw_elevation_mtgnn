@@ -11,19 +11,26 @@ BASE_PATH = Path(__file__).resolve().parent
 # Experiment tag — change this to write outputs to new folders
 EXPERIMENT = "Independent_Study"
 
-# Directories — inputs (always point to the original data on Drive)
+# Directories — inputs and outputs
+# On Colab, point to Google Drive so data persists across sessions.
+# Locally, everything lives under the repo root.
 if IN_COLAB:
-    INPUT_DIR = Path("/content/drive/MyDrive/Environmental_DL_Project/GroundwaterFlowGNN-main/data/input")
+    DRIVE_INPUT   = Path("/content/drive/MyDrive/Environmental_DL_Project/GroundwaterFlowGNN-main")
+    DRIVE_OUTPUT  = Path("/content/drive/MyDrive/Environmental_DL_Project/GroundwaterFlowGNN-v2-3hourly")
+    INPUT_DIR = DRIVE_INPUT / "data" / "input"
+    PREPROCESSED_DIR = DRIVE_OUTPUT / "data" / f"preprocessed_{EXPERIMENT}"
+    GENERATED_GRAPHS = DRIVE_OUTPUT / f"generated_graphs_{EXPERIMENT}"
+    SCATTER_PLOTS = DRIVE_OUTPUT / f"scatterplots_{EXPERIMENT}"
+    SAVED_MODELS_DIR = DRIVE_OUTPUT / f"saved_models_{EXPERIMENT}"
+    TRAINING_RESULTS_DIR = DRIVE_OUTPUT / f"training_results_{EXPERIMENT}"
 else:
     INPUT_DIR = BASE_PATH / "data" / "input"
+    PREPROCESSED_DIR = BASE_PATH / "data" / f"preprocessed_{EXPERIMENT}"
+    GENERATED_GRAPHS = BASE_PATH / f"generated_graphs_{EXPERIMENT}"
+    SCATTER_PLOTS = BASE_PATH / f"scatterplots_{EXPERIMENT}"
+    SAVED_MODELS_DIR = BASE_PATH / f"saved_models_{EXPERIMENT}"
+    TRAINING_RESULTS_DIR = BASE_PATH / f"training_results_{EXPERIMENT}"
 PIEZO_CSV_DIR = INPUT_DIR / "piezometers/csv/csv"
-
-# Directories — outputs (experiment-specific)
-PREPROCESSED_DIR = BASE_PATH / "data" / f"preprocessed_{EXPERIMENT}"
-GENERATED_GRAPHS = BASE_PATH / f"generated_graphs_{EXPERIMENT}"
-SCATTER_PLOTS = BASE_PATH / f"scatterplots_{EXPERIMENT}"
-SAVED_MODELS_DIR = BASE_PATH / f"saved_models_{EXPERIMENT}"
-TRAINING_RESULTS_DIR = BASE_PATH / f"training_results_{EXPERIMENT}"
 TRAINING_SUMMARIES = TRAINING_RESULTS_DIR / "Summaries"
 RUN_PLOTS_AND_RESULTS = TRAINING_RESULTS_DIR / "Individual_Run_Results"
 
