@@ -388,7 +388,7 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
 
                         mean_rmse = active_rmse.mean()
                         std_rmse = active_rmse.std()
-                        sd_threshold = config.get('node_dropout_sd_threshold', 2.0)
+                        sd_threshold = config.get('node_dropout_sd_threshold', 3.0)
                         threshold = mean_rmse + sd_threshold * std_rmse
 
                         # Diagnostics: show worst active nodes
