@@ -3,7 +3,7 @@ def define_base_configuration():
         'synthetic_data': False,
         'percentage': 100,
         'n_piezo_connected': 3,
-        'W': 56,
+        'W': 7,
         'gcn_true': True,
         'build_adj': False,  #ALWAYS FALSE
         'gcn_depth': 4,
@@ -57,8 +57,8 @@ def define_base_configuration():
         'node_dropout_eval_steps': 20,      # autoregressive steps for dropout RMSE (detects compounding errors)
         'node_dropout_check_interval': 20,  # re-check every N epochs after warmup
 
-        # Data resampling — 'W' for weekly, None for native 3-hourly
-        'resampling_freq': None,
+        # Data resampling — 'W' for weekly, 'D' for daily, None for native 3-hourly
+        'resampling_freq': 'D',
     }
 
 # Define variations for each parameter (exclude 'in_dim' and 'out_dim')
