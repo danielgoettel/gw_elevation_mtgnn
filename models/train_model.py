@@ -360,46 +360,78 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
                 if epoch % 10 == 9:
                     print(f"Epoch {epoch + 1}, Train Loss: {train_loss:.2e}, Eval Loss: {eval_loss:.2e}")
         
-                # Dynamic node dropout — evaluate and mask after warmup epoch
-                if (config.get('node_dropout') and node_mask is None
-                        and epoch + 1 == config.get('node_dropout_warmup', 60)):
-                    per_node_rmse = compute_val_rmse_per_node(
-                        model, eval_loader, device, future_window, W,
-                        model_type, config, A_tilde, static_features,
-                        num_piezo, edge_index, edge_type, edge_weight)
-                    mean_rmse = per_node_rmse.mean()
-                    std_rmse = per_node_rmse.std()
-                    threshold = mean_rmse + config.get('node_dropout_sd_threshold', 3.0) * std_rmse
-                    dropped_indices = np.where(per_node_rmse > threshold)[0]
+                # Dynamic node dropout — evaluate and mask periodically after warmup
+                dropout_warmup = config.get('node_dropout_warmup', 60)
+                dropout_interval = config.get('node_dropout_check_interval', 20)
+                dropout_eval_steps = config.get('node_dropout_eval_steps', 20)
+                if (config.get('node_dropout')
+                        and epoch + 1 >= dropout_warmup
+                        and (epoch + 1 - dropout_warmup) % dropout_interval == 0):
 
-                    if len(dropped_indices) > 0:
-                        node_mask = torch.ones(num_piezo, device=device)
-                        node_mask[dropped_indices] = 0.0
-                        dropped_node_names = [df_piezo_columns[i] for i in dropped_indices]
+                    # Build a multi-step evaluation loader to detect compounding errors
+                    dropout_eval_dataset = AutoregressiveTimeSeriesDataset(
+                        val_data, W, dropout_eval_steps, val_mask, num_piezo)
+                    if len(dropout_eval_dataset) > 0:
+                        dropout_eval_loader = DataLoader(
+                            dropout_eval_dataset, batch_size=config.get('batch_size', 32), shuffle=False)
 
-                        # Edge masking — zero out adjacency rows/cols for MTGNN
-                        if A_tilde is not None:
-                            full_mask = torch.ones(A_tilde.shape[0], device=A_tilde.device)
-                            full_mask[:num_piezo] = node_mask.to(A_tilde.device)
-                            A_tilde = A_tilde * full_mask.unsqueeze(0) * full_mask.unsqueeze(1)
+                        per_node_rmse = compute_val_rmse_per_node(
+                            model, dropout_eval_loader, device, dropout_eval_steps, W,
+                            model_type, config, A_tilde, static_features,
+                            num_piezo, edge_index, edge_type, edge_weight)
 
-                        # Edge masking — filter edges for MultigraphGNN
-                        if edge_index is not None:
-                            src_is_dropped = torch.zeros(edge_index.shape[1], dtype=torch.bool, device=edge_index.device)
-                            dst_is_dropped = torch.zeros(edge_index.shape[1], dtype=torch.bool, device=edge_index.device)
-                            for idx in dropped_indices:
-                                src_is_dropped |= (edge_index[0] == idx)
-                                dst_is_dropped |= (edge_index[1] == idx)
-                            keep_edges = ~(src_is_dropped | dst_is_dropped)
-                            edge_index = edge_index[:, keep_edges]
-                            edge_type = edge_type[keep_edges]
-                            if edge_weight is not None:
-                                edge_weight = edge_weight[keep_edges]
+                        # Only consider nodes that are still active
+                        active_mask = np.ones(num_piezo, dtype=bool)
+                        if node_mask is not None:
+                            active_mask = node_mask.cpu().numpy().astype(bool)
+                        active_rmse = per_node_rmse[active_mask]
 
-                        print(f"Node dropout at epoch {epoch + 1}: {len(dropped_indices)} nodes dropped (threshold={threshold:.4f})")
-                        print(f"  Dropped nodes: {dropped_node_names}")
-                    else:
-                        print(f"Node dropout at epoch {epoch + 1}: no outlier nodes found (threshold={threshold:.4f})")
+                        mean_rmse = active_rmse.mean()
+                        std_rmse = active_rmse.std()
+                        sd_threshold = config.get('node_dropout_sd_threshold', 2.0)
+                        threshold = mean_rmse + sd_threshold * std_rmse
+
+                        # Diagnostics: show worst active nodes
+                        active_indices = np.where(active_mask)[0]
+                        worst_active = active_indices[np.argsort(per_node_rmse[active_mask])[-5:][::-1]]
+                        print(f"[Node Dropout] epoch={epoch+1}, eval_steps={dropout_eval_steps}, "
+                              f"mean_rmse={mean_rmse:.4f}, std={std_rmse:.4f}, "
+                              f"threshold={threshold:.4f} (mean + {sd_threshold}*SD)")
+                        for wi in worst_active:
+                            sds_above = (per_node_rmse[wi] - mean_rmse) / std_rmse if std_rmse > 0 else 0
+                            status = "ACTIVE" if active_mask[wi] else "DROPPED"
+                            print(f"  {df_piezo_columns[wi]}: RMSE={per_node_rmse[wi]:.4f} ({sds_above:.1f} SD above mean) [{status}]")
+
+                        # Find new nodes to drop (among still-active nodes)
+                        new_drops = np.where(active_mask & (per_node_rmse > threshold))[0]
+
+                        if len(new_drops) > 0:
+                            if node_mask is None:
+                                node_mask = torch.ones(num_piezo, device=device)
+                            node_mask[new_drops] = 0.0
+                            new_drop_names = [df_piezo_columns[i] for i in new_drops]
+                            dropped_node_names.extend(new_drop_names)
+
+                            # Edge masking — zero out adjacency rows/cols for MTGNN
+                            if A_tilde is not None:
+                                full_mask = torch.ones(A_tilde.shape[0], device=A_tilde.device)
+                                full_mask[:num_piezo] = node_mask.to(A_tilde.device)
+                                A_tilde = A_tilde * full_mask.unsqueeze(0) * full_mask.unsqueeze(1)
+
+                            # Edge masking — filter edges for MultigraphGNN
+                            if edge_index is not None:
+                                for idx in new_drops:
+                                    keep = ~((edge_index[0] == idx) | (edge_index[1] == idx))
+                                    edge_index = edge_index[:, keep]
+                                    edge_type = edge_type[keep]
+                                    if edge_weight is not None:
+                                        edge_weight = edge_weight[keep]
+
+                            print(f"Node dropout at epoch {epoch + 1}: {len(new_drops)} new nodes dropped (threshold={threshold:.4f})")
+                            print(f"  Newly dropped: {new_drop_names}")
+                            print(f"  All dropped nodes: {dropped_node_names}")
+                        else:
+                            print(f"Node dropout at epoch {epoch + 1}: no new outlier nodes (threshold={threshold:.4f})")
 
                 # Adaptive Learning Rate
                 scheduler.step(eval_loss)
@@ -413,8 +445,10 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
                     #print(f"Saved best model to {model_filename}")
                 else:
                     patience_counter += 1
-        
-                if patience_counter >= early_stopping_patience:
+
+                # Suppress early stopping until after first dropout check so it gets a chance to run
+                es_min_epoch = config.get('node_dropout_warmup', 60) if config.get('node_dropout') else 0
+                if patience_counter >= early_stopping_patience and epoch + 1 > es_min_epoch:
                     print("Early stopping triggered.")
                     break
     

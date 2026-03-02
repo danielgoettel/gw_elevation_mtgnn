@@ -52,8 +52,10 @@ def define_base_configuration():
 
         # Dynamic node dropout — isolate high-RMSE nodes mid-training
         'node_dropout': False,
-        'node_dropout_warmup': 60,          # epochs before evaluating for dropout
-        'node_dropout_sd_threshold': 3.0,   # drop nodes with RMSE > mean + threshold * SD
+        'node_dropout_warmup': 60,          # epochs before first dropout evaluation
+        'node_dropout_sd_threshold': 2.0,   # drop nodes with RMSE > mean + threshold * SD
+        'node_dropout_eval_steps': 20,      # autoregressive steps for dropout RMSE (detects compounding errors)
+        'node_dropout_check_interval': 20,  # re-check every N epochs after warmup
 
         # Data resampling — 'W' for weekly, None for native 3-hourly
         'resampling_freq': 'W',
