@@ -207,8 +207,7 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
     
         # Load the best model from the previous window if available
         if best_model_filename is not None:
-            _inner = model._orig_mod if hasattr(model, '_orig_mod') else model
-            _inner.load_state_dict(torch.load(best_model_filename))
+            model.load_state_dict(torch.load(best_model_filename))
             # print(f"Loaded best model from {best_model_filename} for future window: {future_window}")
       
     
@@ -224,8 +223,7 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
     
         # Check if the model already exists
         if os.path.exists(model_filename):
-            _inner = model._orig_mod if hasattr(model, '_orig_mod') else model
-            _inner.load_state_dict(torch.load(model_filename))
+            model.load_state_dict(torch.load(model_filename))
             # print(f"Loaded model from {model_filename}. Skipping training.")
             continue
     
@@ -443,8 +441,7 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
                     best_loss = eval_loss
                     patience_counter = 0
                     # Save the best model
-                    _inner = model._orig_mod if hasattr(model, '_orig_mod') else model
-                    torch.save(_inner.state_dict(), model_filename)
+                    torch.save(model.state_dict(), model_filename)
                     #print(f"Saved best model to {model_filename}")
                 else:
                     patience_counter += 1
@@ -669,13 +666,6 @@ def run_training_and_evaluation(config):
         edge_weight = pyg_graph['edge_weight'].to(device)
     else:
         edge_index = edge_type = edge_weight = None
-
-    # Compile model for faster execution on supported hardware
-    try:
-        model = torch.compile(model)
-        print("Model compiled with torch.compile")
-    except Exception as e:
-        print(f"torch.compile not available, running eagerly: {e}")
 
     for param in model.parameters():
         param.requires_grad = True
