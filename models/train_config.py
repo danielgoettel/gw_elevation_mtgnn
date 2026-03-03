@@ -70,10 +70,19 @@ def define_base_configuration():
 # When this list is non-empty, parameter_variations is ignored.
 # --------------------------------------------------------------------------
 explicit_configs = [
+    # Undirected runs
     {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.08, 'rf_weight_max': 0.2},
     {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.05, 'rf_weight_max': 0.3},
     {'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'rf_weight_min': 0.08, 'rf_weight_max': 0.2},
     {'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'rf_weight_min': 0.05, 'rf_weight_max': 0.3},
+    # Directed runs (higher → lower GW elevation)
+    {'graph_type': 'default', 'directed_graph': True},
+    {'graph_type': 'geolayer', 'directed_graph': True},
+    {'graph_type': 'rf', 'weight_mode': 'fixed', 'directed_graph': True},
+    {'graph_type': 'rf', 'weight_mode': 'fixed', 'layer_constrain': True, 'directed_graph': True},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'directed_graph': True},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.05, 'rf_weight_max': 0.3, 'directed_graph': True},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'directed_graph': True},
 ]
 
 # Define variations for each parameter (Cartesian product — only used when explicit_configs is empty)
