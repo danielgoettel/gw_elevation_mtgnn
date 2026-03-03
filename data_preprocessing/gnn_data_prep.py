@@ -823,20 +823,6 @@ def generate_rf_adjacency_variable_weights_matrix(
     start_evap = start_prec + num_prec
     start_river = start_evap + num_evap
 
-    print("Start indices → pump:", start_pump,
-      "prec:", start_prec,
-      "evap:", start_evap,
-      "river:", start_river)
-
-    print("RF weights for piezo 0 → pumps:",
-      rf_full[0, start_pump:start_pump+num_pump])
-    print("RF weights for piezo 0 → precip:",
-      rf_full[0, start_prec:start_prec+num_prec])
-    print("RF weights for piezo 0 → evap:",
-      rf_full[0, start_evap:start_evap+num_evap])
-    print("RF weights for piezo 0 → rivers:",
-      rf_full[0, start_river:start_river+num_river])
-
     for i in range(num_piezo):
         # — n closest pumps, RF weights —
         pump_idxs = np.array(closest_pumps[i], dtype=int)
@@ -873,6 +859,16 @@ def generate_rf_adjacency_variable_weights_matrix(
                             rf_full[i, r])
             if multiply_exo_weights: adj[i, r] *= 5 * 10^4
             else: adj[i, r] = 0.5
+
+    # Debug: print final adjacency weights (after exo overwrite)
+    print("Final adj weights for piezo 0 → pumps:",
+      adj[0, start_pump:start_pump+num_pump])
+    print("Final adj weights for piezo 0 → precip:",
+      adj[0, start_prec:start_prec+num_prec])
+    print("Final adj weights for piezo 0 → evap:",
+      adj[0, start_evap:start_evap+num_evap])
+    print("Final adj weights for piezo 0 → rivers:",
+      adj[0, start_river:start_river+num_river])
 
     # finally symmetrize by taking the max of (i,j) and (j,i)
     return np.maximum(adj, adj.T)

@@ -582,12 +582,18 @@ def main(run_all=True):
         overall_path = OUTPUTS_DIR / "overall_results.xlsx"
         df_row = pd.DataFrame([row])
         if overall_path.exists():
-            from openpyxl import load_workbook
-            wb = load_workbook(str(overall_path))
-            ws = wb.active
-            for r in df_row.itertuples(index=False):
-                ws.append(list(r))
-            wb.save(str(overall_path))
+            try:
+                from openpyxl import load_workbook
+                wb = load_workbook(str(overall_path))
+                ws = wb.active
+                for r in df_row.itertuples(index=False):
+                    ws.append(list(r))
+                wb.save(str(overall_path))
+            except Exception as e:
+                print(f"⚠ Could not append to {overall_path} ({e}). Backing up and creating new file.")
+                backup = overall_path.with_suffix('.xlsx.bak')
+                overall_path.rename(backup)
+                df_row.to_excel(overall_path, index=False)
         else:
             df_row.to_excel(overall_path, index=False)
         print(f"→ Appended run {i} to {overall_path}")
