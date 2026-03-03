@@ -612,6 +612,7 @@ def run_training_and_evaluation(config):
   
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using {device} device.")
+    torch.set_float32_matmul_precision('medium')  # Use TF32 on A100 for faster matmul
 
     # Compute run output directory
     F_w = config.get('F_w', 3)
@@ -666,6 +667,13 @@ def run_training_and_evaluation(config):
         edge_weight = pyg_graph['edge_weight'].to(device)
     else:
         edge_index = edge_type = edge_weight = None
+
+    # Compile model for faster execution on supported hardware
+    try:
+        model = torch.compile(model)
+        print("Model compiled with torch.compile")
+    except Exception as e:
+        print(f"torch.compile not available, running eagerly: {e}")
 
     for param in model.parameters():
         param.requires_grad = True
