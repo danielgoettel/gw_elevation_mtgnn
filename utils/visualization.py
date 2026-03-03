@@ -415,14 +415,18 @@ def plot_rmse_comparison(model1_rmse, model2_rmse, label1, label2, color_dict):
 
 def plot_rmse_3d_network(
     rmse_df: pd.DataFrame,
-    plot_title = None, 
+    plot_title = None,
     color_columns = ['Type','geolayer','regis_layer'],
     size_range   = (5, 25),
-    include_non_piezometers: bool = False
+    include_non_piezometers: bool = False,
+    adj_matrix = None
 ):
-    # 1) Load adjacency
-    raw_A = torch.load(ADJ_MATRIX_PATH, weights_only=False)
-    A = raw_A.cpu().numpy() if isinstance(raw_A, torch.Tensor) else np.array(raw_A)
+    # 1) Load adjacency — use passed matrix if available, otherwise fall back to file
+    if adj_matrix is not None:
+        A = adj_matrix.cpu().numpy() if isinstance(adj_matrix, torch.Tensor) else np.array(adj_matrix)
+    else:
+        raw_A = torch.load(ADJ_MATRIX_PATH, weights_only=False)
+        A = raw_A.cpu().numpy() if isinstance(raw_A, torch.Tensor) else np.array(raw_A)
 
     # 2) Load nodes & merge RMSE
     nodes_path = Path(PREPROCESSED_DIR) / "nodes_complete.csv"

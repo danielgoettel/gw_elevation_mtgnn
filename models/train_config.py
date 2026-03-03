@@ -83,6 +83,26 @@ explicit_configs = [
     {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'directed_graph': True},
     {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.05, 'rf_weight_max': 0.3, 'directed_graph': True},
     {'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'directed_graph': True},
+    # ---- F_w=3 repeats of the original 6 undirected runs ----
+    {'graph_type': 'default', 'F_w': 3},
+    {'graph_type': 'geolayer', 'F_w': 3},
+    {'graph_type': 'rf', 'weight_mode': 'fixed', 'F_w': 3},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'F_w': 3},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'F_w': 3},
+    {'graph_type': 'rf', 'weight_mode': 'fixed', 'layer_constrain': True, 'F_w': 3},
+    # ---- F_w=3 repeats of the 4 undirected variable-weight runs ----
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'F_w': 3},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.05, 'rf_weight_max': 0.3, 'F_w': 3},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'F_w': 3},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'rf_weight_min': 0.05, 'rf_weight_max': 0.3, 'F_w': 3},
+    # ---- F_w=3 repeats of the 7 directed runs ----
+    {'graph_type': 'default', 'directed_graph': True, 'F_w': 3},
+    {'graph_type': 'geolayer', 'directed_graph': True, 'F_w': 3},
+    {'graph_type': 'rf', 'weight_mode': 'fixed', 'directed_graph': True, 'F_w': 3},
+    {'graph_type': 'rf', 'weight_mode': 'fixed', 'layer_constrain': True, 'directed_graph': True, 'F_w': 3},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'directed_graph': True, 'F_w': 3},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.05, 'rf_weight_max': 0.3, 'directed_graph': True, 'F_w': 3},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'directed_graph': True, 'F_w': 3},
 ]
 
 # Define variations for each parameter (Cartesian product — only used when explicit_configs is empty)

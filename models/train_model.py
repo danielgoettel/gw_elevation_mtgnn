@@ -746,7 +746,7 @@ def run_training_and_evaluation(config):
     title_str = " | ".join(title_parts)
 
     try:
-      scatter = plot_rmse_3d_network(rmse_df, title_str)
+      scatter = plot_rmse_3d_network(rmse_df, title_str, adj_matrix=A_tilde)
       scatter.write_html(str(run_dir / 'rmse3d.html'), include_plotlyjs='cdn')
     except Exception as e:
       print(f"Skipped 3D RMSE plot for {title_str}: {e}")
