@@ -70,6 +70,8 @@ def define_base_configuration():
 # When this list is non-empty, parameter_variations is ignored.
 # --------------------------------------------------------------------------
 explicit_configs = [
+    # ---- F_w=1 vanilla re-run ----
+    {'graph_type': 'default'},
     # ---- F_w=1 RF directed re-runs with n_piezo=6 ----
     {'graph_type': 'rf', 'weight_mode': 'fixed', 'directed_graph': True, 'n_piezo_connected': 6},
     {'graph_type': 'rf', 'weight_mode': 'variable', 'directed_graph': True, 'n_piezo_connected': 6},
