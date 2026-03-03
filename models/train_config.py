@@ -3,7 +3,7 @@ def define_base_configuration():
         'synthetic_data': False,
         'percentage': 100,
         'n_piezo_connected': 3,
-        'W': 35,
+        'W': 5,
         'gcn_true': True,
         'build_adj': False,  #ALWAYS FALSE
         'gcn_depth': 4,
@@ -23,11 +23,11 @@ def define_base_configuration():
         'propalpha': 0.07,
         'tanhalpha': 0.2,
         'layer_norm_affline': True,
-        'graph_type' :'default',
+        'graph_type' :'rf',
         'feature_importance_multiplier' : 1,
         'n_pumps_connected' : 4,
         'weight_mode': 'fixed',  # 'fixed' or 'variable'
-        'ext_data' : True, 
+        'ext_data' : True,
         'multiply_exo_weights' : False,
         'layer_constrain' : False,
         'perturb_weights' : False,
@@ -35,13 +35,13 @@ def define_base_configuration():
 
         # Training parameters
         'learning_rate': 0.001,
-        'num_epochs': 100,
-        'batch_size': 128,
+        'num_epochs': 200,
+        'batch_size': 32,
         'F_w': 1,
         'model_type': 'MTGNN',  # Options: 'MTGNN', 'MultigraphGNN', 'LSTM'
-        'early_stopping_patience': 15,
+        'early_stopping_patience': 30,
         'min_delta': 0.001,
-        'scheduler_patience': 5,
+        'scheduler_patience': 10,
 
         # MultigraphGNN parameters (only used when model_type='MultigraphGNN')
         'num_relations': 5,
@@ -58,7 +58,7 @@ def define_base_configuration():
         'node_dropout_check_interval': 20,  # re-check every N epochs after warmup
 
         # Data resampling — 'W' for weekly, 'D' for daily, None for native 3-hourly
-        'resampling_freq': 'D',
+        'resampling_freq': 'W',
     }
 
 # Define variations for each parameter (exclude 'in_dim' and 'out_dim')
