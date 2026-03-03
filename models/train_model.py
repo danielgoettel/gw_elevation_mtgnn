@@ -577,16 +577,19 @@ def main(run_all=True):
         # Record the result
         record_result(config, test_rmse_mean, test_rmse_std)
 
-        # Save results incrementally after each run
+        # Save results incrementally after each run (preserves existing formatting)
         os.makedirs(str(OUTPUTS_DIR), exist_ok=True)
         overall_path = OUTPUTS_DIR / "overall_results.xlsx"
         df_row = pd.DataFrame([row])
         if overall_path.exists():
-            df_existing = pd.read_excel(overall_path)
-            df_combined = pd.concat([df_existing, df_row], ignore_index=True)
+            from openpyxl import load_workbook
+            wb = load_workbook(str(overall_path))
+            ws = wb.active
+            for r in df_row.itertuples(index=False):
+                ws.append(list(r))
+            wb.save(str(overall_path))
         else:
-            df_combined = df_row
-        df_combined.to_excel(overall_path, index=False)
+            df_row.to_excel(overall_path, index=False)
         print(f"→ Appended run {i} to {overall_path}")
 
     # Also write a timestamped summary of this session
