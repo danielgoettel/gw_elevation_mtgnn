@@ -775,7 +775,7 @@ def run_training_and_evaluation(config):
               (fw_step, *evaluate_and_output(
                   model, config, test_data, test_mask, df_piezo_columns, num_piezo,
                   scaler, A_tilde, static_features, W, device, run_dir, model_type,
-                  dropped_node_names if dropped_node_names else [],
+                  [],
                   fw_step,
                   edge_index=edge_index, edge_type=edge_type, edge_weight=edge_weight))
           ))
