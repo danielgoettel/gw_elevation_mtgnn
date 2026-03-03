@@ -207,7 +207,8 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
     
         # Load the best model from the previous window if available
         if best_model_filename is not None:
-            model.load_state_dict(torch.load(best_model_filename))
+            _inner = model._orig_mod if hasattr(model, '_orig_mod') else model
+            _inner.load_state_dict(torch.load(best_model_filename))
             # print(f"Loaded best model from {best_model_filename} for future window: {future_window}")
       
     
@@ -223,7 +224,8 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
     
         # Check if the model already exists
         if os.path.exists(model_filename):
-            model.load_state_dict(torch.load(model_filename))
+            _inner = model._orig_mod if hasattr(model, '_orig_mod') else model
+            _inner.load_state_dict(torch.load(model_filename))
             # print(f"Loaded model from {model_filename}. Skipping training.")
             continue
     
@@ -441,7 +443,8 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
                     best_loss = eval_loss
                     patience_counter = 0
                     # Save the best model
-                    torch.save(model.state_dict(), model_filename)
+                    _inner = model._orig_mod if hasattr(model, '_orig_mod') else model
+                    torch.save(_inner.state_dict(), model_filename)
                     #print(f"Saved best model to {model_filename}")
                 else:
                     patience_counter += 1
