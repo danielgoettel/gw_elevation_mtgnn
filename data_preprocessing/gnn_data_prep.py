@@ -632,7 +632,9 @@ def generate_rf_adjacency_variable_weights_matrix_layer_constrained(
         feature_importance_multiplier: float = 1.0,
         n_pumps_connected: int = 4,
         multiply_exo_weights = True,
-        rf_piezo_scale = True #This makes it more similar to a geolayer with slight perterbations, described below.
+        rf_piezo_scale = True,
+        rf_weight_min: float = 0.08,
+        rf_weight_max: float = 0.2
 ) -> np.ndarray:
     """
     Generate adjacency matrix using Random Forest feature importance between all nodes.
@@ -658,10 +660,11 @@ def generate_rf_adjacency_variable_weights_matrix_layer_constrained(
       rf_scaled = np.zeros_like(rf_full)
       rf_scaled[rf_full > 0] = (
           (rf_full[rf_full > 0] - min_w)
-          / (max_w - min_w)                 # now in [0,1]
-          * (0.2 - 0.08)                    # now in [0,0.12]
-          + 0.08                            # now in [0.08,0.2]
+          / (max_w - min_w)
+          * (rf_weight_max - rf_weight_min)
+          + rf_weight_min
       )
+      print(f"RF piezo weights scaled to [{rf_weight_min}, {rf_weight_max}]")
 
       # 3. use rf_scaled instead of rf_full
       rf_full = rf_scaled
@@ -761,7 +764,9 @@ def generate_rf_adjacency_variable_weights_matrix(
         n_top_connections: int = 3,
         feature_importance_multiplier: float = 1.0,
         n_pumps_connected: int = 4,
-        multiply_exo_weights = True
+        multiply_exo_weights = True,
+        rf_weight_min: float = 0.08,
+        rf_weight_max: float = 0.2
 ) -> np.ndarray:
     """
     Generate adjacency matrix using Random Forest feature importance between all nodes.
@@ -780,10 +785,22 @@ def generate_rf_adjacency_variable_weights_matrix(
     if rf_full.shape != (N, N):
         raise ValueError(f"Expected full RF matrix shape ({N},{N}), got {rf_full.shape}")
 
-    # scale once
-    #rf_full *= feature_importance_multiplier
-    print("RF matrix shape:", rf_full.shape)  
-    print("Piezo count:", num_piezo, "Pump:", num_pump, 
+    # Scale RF weights to configured range
+    nonzero = rf_full[rf_full > 0]
+    if nonzero.size > 0:
+        min_w, max_w = nonzero.min(), nonzero.max()
+        rf_scaled = np.zeros_like(rf_full)
+        rf_scaled[rf_full > 0] = (
+            (rf_full[rf_full > 0] - min_w)
+            / (max_w - min_w)
+            * (rf_weight_max - rf_weight_min)
+            + rf_weight_min
+        )
+        rf_full = rf_scaled
+
+    print("RF matrix shape:", rf_full.shape)
+    print(f"RF piezo weights scaled to [{rf_weight_min}, {rf_weight_max}]")
+    print("Piezo count:", num_piezo, "Pump:", num_pump,
       "Prec:", num_prec, "Evap:", num_evap, "River:", num_river)
 
     # prep
@@ -931,7 +948,7 @@ def load_and_concatenate_metadata(piezo_metadata_path, pump_metadata_path, evap_
     )
 
 
-def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, percentage=None, n_piezo_connected=3, feature_importance_multiplier = None, n_pumps_connected = 4, weight_mode = 'fixed', same_layer = False, same_layer_kwargs = None, ext_data = True, multiply_exo_weights = False, directed_graph=False, mean_gw_elevation=None):
+def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, percentage=None, n_piezo_connected=3, feature_importance_multiplier = None, n_pumps_connected = 4, weight_mode = 'fixed', same_layer = False, same_layer_kwargs = None, ext_data = True, multiply_exo_weights = False, directed_graph=False, mean_gw_elevation=None, rf_weight_min=0.08, rf_weight_max=0.2):
     # Paths to the metadata files (update these paths according to your folder structure)
 
     metadata_path = PIEZO_METADATA
@@ -1001,9 +1018,9 @@ def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, perce
               adj_matrix = generate_rf_adjacency_matrix(df_piezo_columns, coordinates, num_piezo, num_pump, num_prec, num_evap, num_river, n_piezo_connected, n_pumps_connected)
           if weight_mode == 'variable':
             if same_layer:
-              adj_matrix = generate_rf_adjacency_variable_weights_matrix_layer_constrained(df_piezo_columns, coordinates, num_piezo, num_pump, num_prec, num_evap, num_river, n_top_connections=n_piezo_connected, n_pumps_connected=n_pumps_connected, feature_importance_multiplier=feature_importance_multiplier, multiply_exo_weights=multiply_exo_weights)
+              adj_matrix = generate_rf_adjacency_variable_weights_matrix_layer_constrained(df_piezo_columns, coordinates, num_piezo, num_pump, num_prec, num_evap, num_river, n_top_connections=n_piezo_connected, n_pumps_connected=n_pumps_connected, feature_importance_multiplier=feature_importance_multiplier, multiply_exo_weights=multiply_exo_weights, rf_weight_min=rf_weight_min, rf_weight_max=rf_weight_max)
             else:
-              adj_matrix = generate_rf_adjacency_variable_weights_matrix(df_piezo_columns, coordinates, num_piezo, num_pump, num_prec, num_evap, num_river, n_top_connections=n_piezo_connected, n_pumps_connected=n_pumps_connected, feature_importance_multiplier=feature_importance_multiplier, multiply_exo_weights=multiply_exo_weights)
+              adj_matrix = generate_rf_adjacency_variable_weights_matrix(df_piezo_columns, coordinates, num_piezo, num_pump, num_prec, num_evap, num_river, n_top_connections=n_piezo_connected, n_pumps_connected=n_pumps_connected, feature_importance_multiplier=feature_importance_multiplier, multiply_exo_weights=multiply_exo_weights, rf_weight_min=rf_weight_min, rf_weight_max=rf_weight_max)
           np.save(GENERATED_GRAPHS / f"{graph_tag}.npy", adj_matrix)
 
     else:

@@ -579,12 +579,14 @@ def main(run_all=True):
 
         # Save results incrementally after each run
         os.makedirs(str(OUTPUTS_DIR), exist_ok=True)
-        overall_path = OUTPUTS_DIR / "overall_results.csv"
+        overall_path = OUTPUTS_DIR / "overall_results.xlsx"
         df_row = pd.DataFrame([row])
         if overall_path.exists():
-            df_row.to_csv(overall_path, mode='a', header=False, index=False)
+            df_existing = pd.read_excel(overall_path)
+            df_combined = pd.concat([df_existing, df_row], ignore_index=True)
         else:
-            df_row.to_csv(overall_path, index=False)
+            df_combined = df_row
+        df_combined.to_excel(overall_path, index=False)
         print(f"→ Appended run {i} to {overall_path}")
 
     # Also write a timestamped summary of this session
@@ -617,7 +619,7 @@ def run_training_and_evaluation(config):
         resampling_freq=config.get('resampling_freq', 'W')
     )
     train_data.to_csv(RANDOM_FOREST_TRAINING_DATA)
-    A_tilde, static_features, pyg_graph = gnn_data_prep.main(df_piezo_columns, pump_columns, locations_no_missing, config['graph_type'], config['percentage'] , config['n_piezo_connected'], config['feature_importance_multiplier'], config['n_pumps_connected'], config['weight_mode'], config['layer_constrain'], config['ext_data'], config['multiply_exo_weights'], directed_graph=config.get('directed_graph', False), mean_gw_elevation=mean_gw_elevation)
+    A_tilde, static_features, pyg_graph = gnn_data_prep.main(df_piezo_columns, pump_columns, locations_no_missing, config['graph_type'], config['percentage'] , config['n_piezo_connected'], config['feature_importance_multiplier'], config['n_pumps_connected'], config['weight_mode'], config['layer_constrain'], config['ext_data'], config['multiply_exo_weights'], directed_graph=config.get('directed_graph', False), mean_gw_elevation=mean_gw_elevation, rf_weight_min=config.get('rf_weight_min', 0.08), rf_weight_max=config.get('rf_weight_max', 0.2))
 
     heatmap_title = (f"{config.get('model_type', 'MTGNN')} | graph={config['graph_type']} | "
                      f"weight_mode={config['weight_mode']}<br>"

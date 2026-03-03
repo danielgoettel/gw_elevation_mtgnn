@@ -148,6 +148,11 @@ def generate_model_filename(model_type, future_window, graph_type=None, **kwargs
     if kwargs.get('directed_graph'):
         base_name += "_directed"
 
+    if kwargs.get('weight_mode') == 'variable':
+        wmin = kwargs.get('rf_weight_min', 0.08)
+        wmax = kwargs.get('rf_weight_max', 0.2)
+        base_name += f"_RFW:{wmin}-{wmax}"
+
     return os.path.join(str(SAVED_MODELS_DIR), f"{base_name}.pt")
 
 

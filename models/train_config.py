@@ -57,6 +57,10 @@ def define_base_configuration():
         'node_dropout_eval_steps': 20,      # autoregressive steps for dropout RMSE (detects compounding errors)
         'node_dropout_check_interval': 20,  # re-check every N epochs after warmup
 
+        # RF variable weight range — scales RF importances to [min, max]
+        'rf_weight_min': 0.08,
+        'rf_weight_max': 0.2,
+
         # Data resampling — 'W' for weekly, 'D' for daily, None for native 3-hourly
         'resampling_freq': 'W',
     }
@@ -66,12 +70,10 @@ def define_base_configuration():
 # When this list is non-empty, parameter_variations is ignored.
 # --------------------------------------------------------------------------
 explicit_configs = [
-    {'graph_type': 'default'},
-    {'graph_type': 'geolayer'},
-    {'graph_type': 'rf'},
-    {'graph_type': 'rf', 'weight_mode': 'variable'},
-    {'graph_type': 'rf', 'layer_constrain': True, 'weight_mode': 'variable'},
-    {'graph_type': 'rf', 'layer_constrain': True, 'weight_mode': 'fixed'},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.08, 'rf_weight_max': 0.2},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.05, 'rf_weight_max': 0.3},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'rf_weight_min': 0.08, 'rf_weight_max': 0.2},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'rf_weight_min': 0.05, 'rf_weight_max': 0.3},
 ]
 
 # Define variations for each parameter (Cartesian product — only used when explicit_configs is empty)
