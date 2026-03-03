@@ -26,7 +26,7 @@ from utils.visualization import plot_sequences, plot_sparsity_pattern, plot_comp
 
 from config import PIEZO_LAYER_INFORMATION, RANDOM_FOREST_TRAINING_DATA, SCATTER_PLOTS, TRAINING_SUMMARIES, SAVED_MODELS_DIR, TRAINING_RESULTS_DIR, RUN_PLOTS_AND_RESULTS, OUTPUTS_DIR
 
-from train_config import define_base_configuration, parameter_variations
+from train_config import define_base_configuration, parameter_variations, explicit_configs
 
 import time
 import datetime
@@ -493,8 +493,18 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
 
 
 def generate_configurations():
-    """Generate configs: base config + Cartesian product of all parameter_variations."""
+    """Generate configs from explicit_configs (if non-empty) or Cartesian product of parameter_variations."""
     base_config = define_base_configuration()
+
+    # Explicit config list takes priority over Cartesian product
+    if explicit_configs:
+        configs = []
+        for overrides in explicit_configs:
+            cfg = base_config.copy()
+            cfg.update(overrides)
+            configs.append(cfg)
+        return configs
+
     params = list(parameter_variations.keys())
     variations = [parameter_variations[p] for p in params]
 

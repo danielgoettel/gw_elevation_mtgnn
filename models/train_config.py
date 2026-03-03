@@ -61,10 +61,23 @@ def define_base_configuration():
         'resampling_freq': 'W',
     }
 
-# Define variations for each parameter (exclude 'in_dim' and 'out_dim')
+# --------------------------------------------------------------------------
+# Explicit configuration list — each dict overrides base_config for that run.
+# When this list is non-empty, parameter_variations is ignored.
+# --------------------------------------------------------------------------
+explicit_configs = [
+    {'graph_type': 'default'},
+    {'graph_type': 'geolayer'},
+    {'graph_type': 'rf'},
+    {'graph_type': 'rf', 'weight_mode': 'variable'},
+    {'graph_type': 'rf', 'layer_constrain': True, 'weight_mode': 'variable'},
+    {'graph_type': 'rf', 'layer_constrain': True, 'weight_mode': 'fixed'},
+]
+
+# Define variations for each parameter (Cartesian product — only used when explicit_configs is empty)
 parameter_variations = {
-  'graph_type': ['default', 'geolayer', 'rf'],
-  'node_dropout': [True, False],
+  #'graph_type': ['default', 'geolayer', 'rf'],
+  #'node_dropout': [True, False],
   #'feature_importance_multiplier' : [0.1],
   #'n_piezo_connected' : [4,6],
   #'n_pumps_connected' : [3],
