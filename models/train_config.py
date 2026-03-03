@@ -70,65 +70,31 @@ def define_base_configuration():
 # When this list is non-empty, parameter_variations is ignored.
 # --------------------------------------------------------------------------
 explicit_configs = [
-    # ---- F_w=1 vanilla re-run ----
-    {'graph_type': 'default'},
-    # ---- F_w=1 RF directed re-runs with n_piezo=6 ----
-    {'graph_type': 'rf', 'weight_mode': 'fixed', 'directed_graph': True, 'n_piezo_connected': 6},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'directed_graph': True, 'n_piezo_connected': 6},
-    # ---- F_w=3 undirected runs with n_piezo=3 (re-runs) ----
-    {'graph_type': 'default', 'F_w': 3},
-    {'graph_type': 'geolayer', 'F_w': 3},
-    {'graph_type': 'rf', 'weight_mode': 'fixed', 'F_w': 3},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'F_w': 3},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'F_w': 3},
-    {'graph_type': 'rf', 'weight_mode': 'fixed', 'layer_constrain': True, 'F_w': 3},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'F_w': 3},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.05, 'rf_weight_max': 0.3, 'F_w': 3},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'F_w': 3},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'rf_weight_min': 0.05, 'rf_weight_max': 0.3, 'F_w': 3},
-    # ---- F_w=3 directed runs with n_piezo=3 (re-runs) ----
-    {'graph_type': 'default', 'directed_graph': True, 'F_w': 3},
-    {'graph_type': 'geolayer', 'directed_graph': True, 'F_w': 3},
-    {'graph_type': 'rf', 'weight_mode': 'fixed', 'directed_graph': True, 'F_w': 3},
-    {'graph_type': 'rf', 'weight_mode': 'fixed', 'layer_constrain': True, 'directed_graph': True, 'F_w': 3},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'directed_graph': True, 'F_w': 3},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.05, 'rf_weight_max': 0.3, 'directed_graph': True, 'F_w': 3},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'directed_graph': True, 'F_w': 3},
-    # ---- F_w=3 directed runs with n_piezo=6 ----
-    {'graph_type': 'default', 'directed_graph': True, 'F_w': 3, 'n_piezo_connected': 6},
-    {'graph_type': 'geolayer', 'directed_graph': True, 'F_w': 3, 'n_piezo_connected': 6},
-    {'graph_type': 'rf', 'weight_mode': 'fixed', 'directed_graph': True, 'F_w': 3, 'n_piezo_connected': 6},
-    {'graph_type': 'rf', 'weight_mode': 'fixed', 'layer_constrain': True, 'directed_graph': True, 'F_w': 3, 'n_piezo_connected': 6},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'directed_graph': True, 'F_w': 3, 'n_piezo_connected': 6},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.05, 'rf_weight_max': 0.3, 'directed_graph': True, 'F_w': 3, 'n_piezo_connected': 6},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'directed_graph': True, 'F_w': 3, 'n_piezo_connected': 6},
-    # ---- F_w=5 undirected runs with n_piezo=3 ----
-    {'graph_type': 'default', 'F_w': 5},
-    {'graph_type': 'geolayer', 'F_w': 5},
-    {'graph_type': 'rf', 'weight_mode': 'fixed', 'F_w': 5},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'F_w': 5},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'F_w': 5},
-    {'graph_type': 'rf', 'weight_mode': 'fixed', 'layer_constrain': True, 'F_w': 5},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'F_w': 5},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.05, 'rf_weight_max': 0.3, 'F_w': 5},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'F_w': 5},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'rf_weight_min': 0.05, 'rf_weight_max': 0.3, 'F_w': 5},
-    # ---- F_w=5 directed runs with n_piezo=3 ----
-    {'graph_type': 'default', 'directed_graph': True, 'F_w': 5},
-    {'graph_type': 'geolayer', 'directed_graph': True, 'F_w': 5},
-    {'graph_type': 'rf', 'weight_mode': 'fixed', 'directed_graph': True, 'F_w': 5},
-    {'graph_type': 'rf', 'weight_mode': 'fixed', 'layer_constrain': True, 'directed_graph': True, 'F_w': 5},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'directed_graph': True, 'F_w': 5},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.05, 'rf_weight_max': 0.3, 'directed_graph': True, 'F_w': 5},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'directed_graph': True, 'F_w': 5},
-    # ---- F_w=5 directed runs with n_piezo=6 ----
-    {'graph_type': 'default', 'directed_graph': True, 'F_w': 5, 'n_piezo_connected': 6},
-    {'graph_type': 'geolayer', 'directed_graph': True, 'F_w': 5, 'n_piezo_connected': 6},
-    {'graph_type': 'rf', 'weight_mode': 'fixed', 'directed_graph': True, 'F_w': 5, 'n_piezo_connected': 6},
-    {'graph_type': 'rf', 'weight_mode': 'fixed', 'layer_constrain': True, 'directed_graph': True, 'F_w': 5, 'n_piezo_connected': 6},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'directed_graph': True, 'F_w': 5, 'n_piezo_connected': 6},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.05, 'rf_weight_max': 0.3, 'directed_graph': True, 'F_w': 5, 'n_piezo_connected': 6},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'directed_graph': True, 'F_w': 5, 'n_piezo_connected': 6},
+    # ---- Undirected runs with n_piezo=3 ----
+    {'graph_type': 'default', 'F_w': 10},
+    {'graph_type': 'geolayer', 'F_w': 10},
+    {'graph_type': 'rf', 'weight_mode': 'fixed', 'F_w': 10},
+    {'graph_type': 'rf', 'weight_mode': 'fixed', 'layer_constrain': True, 'F_w': 10},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'F_w': 10},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.05, 'rf_weight_max': 0.3, 'F_w': 10},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'F_w': 10},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'rf_weight_min': 0.05, 'rf_weight_max': 0.3, 'F_w': 10},
+    # ---- Directed runs with n_piezo=3 ----
+    {'graph_type': 'default', 'directed_graph': True, 'F_w': 10},
+    {'graph_type': 'geolayer', 'directed_graph': True, 'F_w': 10},
+    {'graph_type': 'rf', 'weight_mode': 'fixed', 'directed_graph': True, 'F_w': 10},
+    {'graph_type': 'rf', 'weight_mode': 'fixed', 'layer_constrain': True, 'directed_graph': True, 'F_w': 10},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'directed_graph': True, 'F_w': 10},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.05, 'rf_weight_max': 0.3, 'directed_graph': True, 'F_w': 10},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'directed_graph': True, 'F_w': 10},
+    # ---- Directed runs with n_piezo=6 ----
+    {'graph_type': 'default', 'directed_graph': True, 'F_w': 10, 'n_piezo_connected': 6},
+    {'graph_type': 'geolayer', 'directed_graph': True, 'F_w': 10, 'n_piezo_connected': 6},
+    {'graph_type': 'rf', 'weight_mode': 'fixed', 'directed_graph': True, 'F_w': 10, 'n_piezo_connected': 6},
+    {'graph_type': 'rf', 'weight_mode': 'fixed', 'layer_constrain': True, 'directed_graph': True, 'F_w': 10, 'n_piezo_connected': 6},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'directed_graph': True, 'F_w': 10, 'n_piezo_connected': 6},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.05, 'rf_weight_max': 0.3, 'directed_graph': True, 'F_w': 10, 'n_piezo_connected': 6},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'directed_graph': True, 'F_w': 10, 'n_piezo_connected': 6},
 ]
 
 # Define variations for each parameter (Cartesian product — only used when explicit_configs is empty)
