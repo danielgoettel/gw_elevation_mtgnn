@@ -161,7 +161,7 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
           train_mask, val_mask, df_piezo_columns, num_piezo, static_features, A_tilde,
           F_w, W, config, model_type,
           edge_index=None, edge_type=None, edge_weight=None,
-          run_dir=None):
+          run_dir=None, eval_callback=None):
     
     # Early stopping parameters
     early_stopping_patience = config.get('early_stopping_patience', 50)
@@ -225,6 +225,8 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
         if os.path.exists(model_filename):
             model.load_state_dict(torch.load(model_filename))
             # print(f"Loaded model from {model_filename}. Skipping training.")
+            if eval_callback is not None:
+                eval_callback(future_window)
             continue
     
         # start_time_loading_train_dataset = time.time()
@@ -479,6 +481,10 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
                 
             # At the end of training for each future window, update the best model filename
             best_model_filename = model_filename if os.path.exists(model_filename) else None
+
+            # Evaluate and produce output after each F_w training step
+            if eval_callback is not None:
+                eval_callback(future_window)
                 
         except RuntimeError as e:
             if "CUDA out of memory" in str(e):
@@ -544,59 +550,61 @@ def main(run_all=True):
         else:
             print(f"Running base configuration {i} of {total_runs}")
         
-        test_rmse_mean, test_rmse_std, geolayer_summary, dropped_node_names = run_training_and_evaluation(config)
+        step_results, dropped_node_names = run_training_and_evaluation(config)
 
-        row = {
-            "Timestamp":                datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
-            "Model Type":               config["model_type"],
-            "Graph Type":               config["graph_type"],
-            "Percentage":               config["percentage"],
-            "Piezometer Connections":   config["n_piezo_connected"],
-            "Pump Connections":         config["n_pumps_connected"],
-            'FIM':                      config["feature_importance_multiplier"],
-            'Weight Mode':              config['weight_mode'],
-            'Same Layer':               config['layer_constrain'],
-            'Multiply_Exo_Weights':     config['multiply_exo_weights'],
-            "W":                        config['W'],
-            "F_w":                      config['F_w'],
-            "Node Dropout":             config.get('node_dropout', False),
-            "Dropped Nodes":            ", ".join(dropped_node_names) if dropped_node_names else "",
-            "Directed Graph":           config.get('directed_graph', False),
-            "Overall RMSE Mean":        test_rmse_mean,
-            "Overall RMSE StdDev":      test_rmse_std,
-        }
+        for fw_step, test_rmse_mean, test_rmse_std, geolayer_summary in step_results:
+            row = {
+                "Timestamp":                datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+                "Model Type":               config["model_type"],
+                "Graph Type":               config["graph_type"],
+                "Percentage":               config["percentage"],
+                "Piezometer Connections":   config["n_piezo_connected"],
+                "Pump Connections":         config["n_pumps_connected"],
+                'FIM':                      config["feature_importance_multiplier"],
+                'Weight Mode':              config['weight_mode'],
+                'RF Weight Range':          f"{config.get('rf_weight_min', '')}-{config.get('rf_weight_max', '')}" if config['weight_mode'] == 'variable' else "",
+                'Same Layer':               config['layer_constrain'],
+                'Multiply_Exo_Weights':     config['multiply_exo_weights'],
+                "W":                        config['W'],
+                "F_w (trained)":            fw_step,
+                "F_w (config)":             config['F_w'],
+                "Node Dropout":             config.get('node_dropout', False),
+                "Dropped Nodes":            ", ".join(dropped_node_names) if dropped_node_names else "",
+                "Directed Graph":           config.get('directed_graph', False),
+                "Overall RMSE Mean":        test_rmse_mean,
+                "Overall RMSE StdDev":      test_rmse_std,
+            }
 
-        for _, grp in geolayer_summary.iterrows():
-            layer = grp["geolayer"]
-            row[f"{layer} Mean"] = grp["RMSE Mean"]
-            row[f"{layer} StdDev"] = grp["RMSE StdDev"]
-          
+            for _, grp in geolayer_summary.iterrows():
+                layer = grp["geolayer"]
+                row[f"{layer} Mean"] = grp["RMSE Mean"]
+                row[f"{layer} StdDev"] = grp["RMSE StdDev"]
 
-        summaries.append(row)
+            summaries.append(row)
 
-        # Record the result
-        record_result(config, test_rmse_mean, test_rmse_std)
+            # Record the result
+            record_result(config, test_rmse_mean, test_rmse_std)
 
-        # Save results incrementally after each run (preserves existing formatting)
-        os.makedirs(str(OUTPUTS_DIR), exist_ok=True)
-        overall_path = OUTPUTS_DIR / "overall_results.xlsx"
-        df_row = pd.DataFrame([row])
-        if overall_path.exists():
-            try:
-                from openpyxl import load_workbook
-                wb = load_workbook(str(overall_path))
-                ws = wb.active
-                for r in df_row.itertuples(index=False):
-                    ws.append(list(r))
-                wb.save(str(overall_path))
-            except Exception as e:
-                print(f"⚠ Could not append to {overall_path} ({e}). Backing up and creating new file.")
-                backup = overall_path.with_suffix('.xlsx.bak')
-                overall_path.rename(backup)
+            # Save results incrementally after each run (preserves existing formatting)
+            os.makedirs(str(OUTPUTS_DIR), exist_ok=True)
+            overall_path = OUTPUTS_DIR / "overall_results.xlsx"
+            df_row = pd.DataFrame([row])
+            if overall_path.exists():
+                try:
+                    from openpyxl import load_workbook
+                    wb = load_workbook(str(overall_path))
+                    ws = wb.active
+                    for r in df_row.itertuples(index=False):
+                        ws.append(list(r))
+                    wb.save(str(overall_path))
+                except Exception as e:
+                    print(f"⚠ Could not append to {overall_path} ({e}). Backing up and creating new file.")
+                    backup = overall_path.with_suffix('.xlsx.bak')
+                    overall_path.rename(backup)
+                    df_row.to_excel(overall_path, index=False)
+            else:
                 df_row.to_excel(overall_path, index=False)
-        else:
-            df_row.to_excel(overall_path, index=False)
-        print(f"→ Appended run {i} to {overall_path}")
+            print(f"→ Appended F_w={fw_step} result for run {i} to {overall_path}")
 
     # Also write a timestamped summary of this session
     df_summary = pd.DataFrame(summaries)
@@ -608,8 +616,86 @@ def main(run_all=True):
         analyze_results()
 
 
+def evaluate_and_output(model, config, test_data, test_mask, df_piezo_columns, num_piezo,
+                        scaler, A_tilde, static_features, W, device, run_dir, model_type,
+                        dropped_node_names, fw_step,
+                        edge_index=None, edge_type=None, edge_weight=None):
+    """Run 100-step autoregressive test evaluation and produce all outputs for a given F_w training step."""
+
+    # Create F_w-specific output subdirectory
+    step_dir = run_dir / f"eval_fw{fw_step}"
+    os.makedirs(str(step_dir), exist_ok=True)
+
+    test_sample = AutoregressiveTimeSeriesDataset(test_data, input_window=W, max_future_window=100, missing_data_mask=test_mask, num_piezo=num_piezo)[1]
+    test_input, test_predicted_model, test_target = make_predictions(
+        model, test_sample, device, 100, W, A_tilde, static_features, num_piezo,
+        modeltype=model_type, edge_index=edge_index, edge_type=edge_type, edge_weight=edge_weight)
+
+    test_predicted_model_ = inverse_transform_with_shape_adjustment(test_predicted_model.numpy(), scaler, num_piezo)
+    test_input_ = inverse_transform_with_shape_adjustment(test_input.numpy(), scaler, num_piezo)
+    test_target_ = inverse_transform_with_shape_adjustment(test_target.numpy(), scaler, num_piezo)
+
+    test_rmse = calculate_rmse_per_piezometer(test_predicted_model_, test_target_, num_piezo)
+    test_rmse_mean, test_rmse_std = print_mean_std(test_rmse, f"Test RMSE (after F_w={fw_step} training)")
+
+    save_rmse_values(test_rmse, future_window=fw_step, output_dir=step_dir, **config)
+
+    # Plotting
+    _, _, _, mask_seq_test = test_sample
+    start_date_test = test_data.index[0]
+    plot_freq = config.get('resampling_freq', 'W')
+    if plot_freq is None:
+        plot_freq = pd.infer_freq(test_data.index) or '3h'
+
+    color_dict_seq = plot_comparison_sequence(test_input_, test_predicted_model_, test_target_, start_date_test, df_piezo_columns, mask=mask_seq_test, selected_nodes=None, output_dir=step_dir, freq=plot_freq)
+    color_dict_dual = plot_comparison_sequence_dual_y(test_input_, test_predicted_model_, test_target_, start_date_test, mask_seq_test, test_rmse, df_piezo_columns, output_dir=step_dir, freq=plot_freq)
+
+    # Layer info and RMSE summary
+    layer_info = pd.read_csv(PIEZO_LAYER_INFORMATION).rename(columns=lambda x: x.strip())
+    rmse_df = pd.DataFrame({'name': df_piezo_columns, 'rmse': test_rmse})
+    if dropped_node_names:
+        rmse_df = rmse_df[~rmse_df['name'].isin(dropped_node_names)].reset_index(drop=True)
+    merged = rmse_df.merge(layer_info, on='name', how='left')
+
+    # Build title
+    title_parts = [
+        f"{model_type}",
+        f"graph={config['graph_type']}",
+        f"topo={config['n_piezo_connected']}",
+        f"pumps={config['n_pumps_connected']}",
+        f"W={config['W']}",
+        f"F_w={fw_step}",
+        f"weight_mode={config['weight_mode']}",
+    ]
+    if config.get('exclude_evap_precip'):
+        title_parts.append(f"exclude_evap_precip={config['exclude_evap_precip']}")
+    if config.get('perturb_weights'):
+        title_parts.append("perturb_weights")
+    if config.get('multiply_exo_weights'):
+        title_parts.append("multiply_exo_weights")
+    if config.get('directed_graph'):
+        title_parts.append("directed")
+    if config.get('node_dropout'):
+        title_parts.append(f"node_dropout(warmup={config.get('node_dropout_warmup')}, sd={config.get('node_dropout_sd_threshold')})")
+    title_str = " | ".join(title_parts)
+
+    try:
+        scatter = plot_rmse_3d_network(rmse_df, title_str, adj_matrix=A_tilde)
+        scatter.write_html(str(step_dir / 'rmse3d.html'), include_plotlyjs='cdn')
+    except Exception as e:
+        print(f"Skipped 3D RMSE plot for {title_str}: {e}")
+
+    geolayer_summary = merged.groupby('geolayer')['rmse'].agg(['mean', 'std']).reset_index()
+    geolayer_summary.columns = ['geolayer', 'RMSE Mean', 'RMSE StdDev']
+
+    print(f"\n📊 RMSE Summary by Geolayer (F_w={fw_step}):")
+    print(geolayer_summary.to_string(index=False))
+
+    return test_rmse_mean, test_rmse_std, geolayer_summary
+
+
 def run_training_and_evaluation(config):
-  
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using {device} device.")
 
@@ -639,14 +725,14 @@ def run_training_and_evaluation(config):
     if config.get('directed_graph'):
         heatmap_title += " | directed"
     ahm = plot_adj_heatmap(A_tilde, output_dir=run_dir, title=heatmap_title)
-     
+
     # plot_sparsity_pattern(A_tilde, markersize=10)
 
     num_piezo = len(df_piezo_columns)
     num_features = static_features.shape[1]  # Assuming static_features is a tensor
     seq_length = config['W']  # sequence length
     num_nodes = A_tilde.shape[0]
-    
+
     # Specify the sequence length (W) and future window size
     W = config['W']
 
@@ -676,107 +762,37 @@ def run_training_and_evaluation(config):
     optimizer = optim.Adam(model.parameters(), lr=config.get('learning_rate', 0.001))
     loss_function = nn.MSELoss()
 
+    # Collect results for each F_w step
+    step_results = []
+
     dropped_node_names = train(model, optimizer, loss_function, device, num_epochs=config.get('num_epochs', 200),
           train_data=train_data, val_data=val_data, train_mask=train_mask, val_mask=val_mask,
           df_piezo_columns=df_piezo_columns, num_piezo=num_piezo, static_features=static_features,
           A_tilde=A_tilde, F_w=F_w, W=W, config=config, model_type=model_type,
           edge_index=edge_index, edge_type=edge_type, edge_weight=edge_weight,
-          run_dir=run_dir)
+          run_dir=run_dir,
+          eval_callback=lambda fw_step: step_results.append(
+              (fw_step, *evaluate_and_output(
+                  model, config, test_data, test_mask, df_piezo_columns, num_piezo,
+                  scaler, A_tilde, static_features, W, device, run_dir, model_type,
+                  dropped_node_names if dropped_node_names else [],
+                  fw_step,
+                  edge_index=edge_index, edge_type=edge_type, edge_weight=edge_weight))
+          ))
     if dropped_node_names is None:
         dropped_node_names = []
 
+    # If train() didn't trigger callbacks (e.g. all steps loaded from cache),
+    # evaluate once at the final F_w
+    if not step_results:
+        rmse_mean, rmse_std, geo_summary = evaluate_and_output(
+            model, config, test_data, test_mask, df_piezo_columns, num_piezo,
+            scaler, A_tilde, static_features, W, device, run_dir, model_type,
+            dropped_node_names, F_w,
+            edge_index=edge_index, edge_type=edge_type, edge_weight=edge_weight)
+        step_results.append((F_w, rmse_mean, rmse_std, geo_summary))
 
-    # Selecting first samples from training and testing datasets
-    test_sample = AutoregressiveTimeSeriesDataset(test_data, input_window=W, max_future_window=100, missing_data_mask = test_mask, num_piezo = num_piezo)[1]
-    test_input, test_predicted_model, test_target = make_predictions(
-        model, test_sample, device, 100, W, A_tilde, static_features, num_piezo,
-        modeltype=model_type, edge_index=edge_index, edge_type=edge_type, edge_weight=edge_weight)
-        
-    # Transform predictions back to original scale
-
-    test_predicted_model_ = inverse_transform_with_shape_adjustment(test_predicted_model.numpy(), scaler, num_piezo)
-    test_input_ = inverse_transform_with_shape_adjustment(test_input.numpy(), scaler, num_piezo)
-    test_target_ = inverse_transform_with_shape_adjustment(test_target.numpy(), scaler, num_piezo)
-
-    test_rmse = calculate_rmse_per_piezometer(test_predicted_model_, test_target_, num_piezo)
-
-    test_rmse_mean, test_rmse_std = print_mean_std(test_rmse, "Test RMSE")
-
-    save_rmse_values(test_rmse, future_window=F_w, output_dir=run_dir, **config)
-
-    # Plotting Model 1 Predictions
-    _, _, _, mask_seq_test = test_sample
-    start_date_test = test_data.index[0]
-
-    # Determine time frequency for plot x-axes
-    plot_freq = config.get('resampling_freq', 'W')
-    if plot_freq is None:
-        plot_freq = pd.infer_freq(test_data.index) or '3h'
-
-    # plot_sequences(test_input_, test_predicted_model_, test_target_, df_piezo_columns, 'Model Evaluation', start_date_test, model_labels=('Prediction', '', ''), mask = mask_seq_test)
-    color_dict_seq = plot_comparison_sequence(test_input_, test_predicted_model_, test_target_, start_date_test, df_piezo_columns, mask=mask_seq_test, selected_nodes=None, output_dir=run_dir, freq=plot_freq)
-
-    color_dict_dual = plot_comparison_sequence_dual_y(test_input_, test_predicted_model_, test_target_, start_date_test, mask_seq_test, test_rmse, df_piezo_columns, output_dir=run_dir, freq=plot_freq)
-    combined_color_dict = {**color_dict_seq, **color_dict_dual}
-
-  
-
-    # Load layer info
-    layer_info = pd.read_csv(PIEZO_LAYER_INFORMATION).rename(columns=lambda x: x.strip())
-
-    # Merge with RMSE values, excluding dropped nodes
-    rmse_df = pd.DataFrame({
-        'name': df_piezo_columns,
-        'rmse': test_rmse
-    })
-    if dropped_node_names:
-        rmse_df = rmse_df[~rmse_df['name'].isin(dropped_node_names)].reset_index(drop=True)
-    merged = rmse_df.merge(layer_info, on='name', how='left')
-
-    # Build title from all relevant config options
-    title_parts = [
-        f"{model_type}",
-        f"graph={config['graph_type']}",
-        f"topo={config['n_piezo_connected']}",
-        f"pumps={config['n_pumps_connected']}",
-        f"W={config['W']}",
-        f"weight_mode={config['weight_mode']}",
-    ]
-    if config.get('exclude_evap_precip'):
-        title_parts.append(f"exclude_evap_precip={config['exclude_evap_precip']}")
-    if config.get('perturb_weights'):
-        title_parts.append("perturb_weights")
-    if config.get('multiply_exo_weights'):
-        title_parts.append("multiply_exo_weights")
-    if config.get('directed_graph'):
-        title_parts.append("directed")
-    if config.get('node_dropout'):
-        title_parts.append(f"node_dropout(warmup={config.get('node_dropout_warmup')}, sd={config.get('node_dropout_sd_threshold')})")
-    title_str = " | ".join(title_parts)
-
-    try:
-      scatter = plot_rmse_3d_network(rmse_df, title_str, adj_matrix=A_tilde)
-      scatter.write_html(str(run_dir / 'rmse3d.html'), include_plotlyjs='cdn')
-    except Exception as e:
-      print(f"Skipped 3D RMSE plot for {title_str}: {e}")
-
-    # Define summary function
-    def summarize_by_column(col):
-        grouped = merged.groupby(col)['rmse'].agg(['mean', 'std']).reset_index()
-        grouped.columns = [col, 'RMSE Mean', 'RMSE StdDev']
-        return grouped
-
-    # Summarize by geolayer
-    geolayer_summary = summarize_by_column('geolayer')
-
-    # Summarize by regis_layer
-    #regis_summary = summarize_by_column('regis_layer')
-
-    # Print results
-    print("\n📊 RMSE Summary by Geolayer:")
-    print(geolayer_summary.to_string(index=False))
-
-    return test_rmse_mean, test_rmse_std, geolayer_summary, dropped_node_names
+    return step_results, dropped_node_names
 
 if __name__ == "__main__":
     main(run_all=False) # for running only the base configuration
