@@ -686,20 +686,6 @@ def generate_rf_full_vim_matrix(
     if rf_full.shape != (N, N):
         raise ValueError(f"Expected full RF matrix shape ({N},{N}), got {rf_full.shape}")
 
-    # Scale RF weights to configured range
-    nonzero = rf_full[rf_full > 0]
-    if nonzero.size > 0:
-        min_w, max_w = nonzero.min(), nonzero.max()
-        rf_scaled = np.zeros_like(rf_full)
-        rf_scaled[rf_full > 0] = (
-            (rf_full[rf_full > 0] - min_w)
-            / (max_w - min_w)
-            * (rf_weight_max - rf_weight_min)
-            + rf_weight_min
-        )
-        rf_full = rf_scaled
-
-    print(f"RF piezo weights scaled to [{rf_weight_min}, {rf_weight_max}]")
     print(f"VIM threshold: {vim_min}, top-N cap: {n_top_connections}")
 
     # Prepare adjacency
@@ -709,7 +695,7 @@ def generate_rf_full_vim_matrix(
         n_pumps_connected, num_piezo, pump_distances_file=PUMP_DISTANCES
     )
 
-    # Piezo→piezo: VIM threshold + optional top-N cap
+    # Piezo→piezo: apply VIM threshold on RAW importances, then scale survivors
     conn_counts = []
     for i in range(num_piezo):
         row = rf_full[i, :num_piezo].copy()
@@ -723,6 +709,18 @@ def generate_rf_full_vim_matrix(
                 mask[topk] = True
         adj[i, np.where(mask)] = row[np.where(mask)]
         conn_counts.append(int(mask.sum()))
+
+    # Scale surviving edge weights to [rf_weight_min, rf_weight_max]
+    nonzero = adj[adj > 0]
+    if nonzero.size > 0:
+        min_w, max_w = nonzero.min(), nonzero.max()
+        adj[adj > 0] = (
+            (adj[adj > 0] - min_w)
+            / (max_w - min_w)
+            * (rf_weight_max - rf_weight_min)
+            + rf_weight_min
+        )
+    print(f"RF piezo weights scaled to [{rf_weight_min}, {rf_weight_max}]")
 
     print(f"Piezo-piezo connections per node: min={min(conn_counts)}, "
           f"max={max(conn_counts)}, mean={np.mean(conn_counts):.1f}")
