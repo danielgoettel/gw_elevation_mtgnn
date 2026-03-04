@@ -156,6 +156,10 @@ def generate_model_filename(model_type, future_window, graph_type=None, **kwargs
     if gcn_depth != 4:
         base_name += f"_GCNd{gcn_depth}"
 
+    propalpha = kwargs.get('propalpha', 0.07)
+    if propalpha != 0.07:
+        base_name += f"_alpha{propalpha}"
+
     if kwargs.get('multi_support'):
         adap_gt = kwargs.get('adaptive_graph_type', 'rf')
         base_name += f"_MS-{adap_gt}"

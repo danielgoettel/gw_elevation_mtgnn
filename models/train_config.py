@@ -72,13 +72,16 @@ def define_base_configuration():
 # When this list is non-empty, parameter_variations is ignored.
 # --------------------------------------------------------------------------
 explicit_configs = [
-    # ---- Weekly, gcn_depth=2: graph structure sensitivity test ----
-    {'graph_type': 'default', 'gcn_depth': 2, 'F_w': 4},
-    {'graph_type': 'geolayer', 'gcn_depth': 2, 'F_w': 4},
-    {'graph_type': 'rf', 'weight_mode': 'fixed', 'gcn_depth': 2, 'F_w': 4},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'gcn_depth': 2, 'F_w': 4},
-    {'graph_type': 'rf', 'weight_mode': 'fixed', 'layer_constrain': True, 'gcn_depth': 2, 'F_w': 4},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'gcn_depth': 2, 'F_w': 4},
+    # ---- propalpha=0.15 ----
+    {'graph_type': 'default', 'propalpha': 0.15, 'F_w': 3},
+    {'graph_type': 'geolayer', 'propalpha': 0.15, 'F_w': 3},
+    {'graph_type': 'rf', 'weight_mode': 'fixed', 'propalpha': 0.15, 'F_w': 3},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'propalpha': 0.15, 'F_w': 3},
+    # ---- propalpha=0.3 ----
+    {'graph_type': 'default', 'propalpha': 0.3, 'F_w': 3},
+    {'graph_type': 'geolayer', 'propalpha': 0.3, 'F_w': 3},
+    {'graph_type': 'rf', 'weight_mode': 'fixed', 'propalpha': 0.3, 'F_w': 3},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'propalpha': 0.3, 'F_w': 3},
 ]
 
 # Define variations for each parameter (Cartesian product — only used when explicit_configs is empty)
