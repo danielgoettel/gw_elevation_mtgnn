@@ -572,9 +572,8 @@ def generate_rf_adjacency_variable(
     else:
         rf_full = np.array(raw_rf, dtype=float)
 
-    N = rf_full.shape[0]
-    if rf_full.shape != (N, N):
-        raise ValueError(f"Expected full RF matrix shape ({N},{N}), got {rf_full.shape}")
+    # Actual node count (may differ from RF matrix if nodes were dropped, e.g. daily resampling)
+    num_nodes = num_piezo + num_pump + num_prec + num_evap + num_river
 
     # Scale RF weights to configured range [rf_weight_min, rf_weight_max]
     nonzero = rf_full[rf_full > 0]
@@ -597,8 +596,8 @@ def generate_rf_adjacency_variable(
         df_layers = pd.read_csv(PIEZO_LAYER_INFORMATION).set_index('name')
         piezo_labels = df_layers.loc[piezo_columns, "geolayer"].fillna('MISSING').values
 
-    # Prepare adjacency
-    adj_matrix = np.zeros((N, N), dtype=float)
+    # Prepare adjacency — sized to actual node count, not RF matrix
+    adj_matrix = np.zeros((num_nodes, num_nodes), dtype=float)
     closest_pumps = get_n_closest_pumps_indices(
         n_pumps_connected, num_piezo, pump_distances_file=PUMP_DISTANCES
     )
@@ -682,14 +681,13 @@ def generate_rf_full_vim_matrix(
     else:
         rf_full = np.array(raw_rf, dtype=float)
 
-    N = rf_full.shape[0]
-    if rf_full.shape != (N, N):
-        raise ValueError(f"Expected full RF matrix shape ({N},{N}), got {rf_full.shape}")
+    # Actual node count (may differ from RF matrix if nodes were dropped)
+    num_nodes = num_piezo + num_pump + num_prec + num_evap + num_river
 
     print(f"VIM threshold: {vim_min}, top-N cap: {n_top_connections}")
 
-    # Prepare adjacency
-    adj = np.zeros((N, N), dtype=float)
+    # Prepare adjacency — sized to actual node count, not RF matrix
+    adj = np.zeros((num_nodes, num_nodes), dtype=float)
     dmat = pairwise_distances(all_coords)
     closest_pumps = get_n_closest_pumps_indices(
         n_pumps_connected, num_piezo, pump_distances_file=PUMP_DISTANCES
