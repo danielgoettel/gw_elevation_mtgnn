@@ -72,16 +72,11 @@ def define_base_configuration():
 # When this list is non-empty, parameter_variations is ignored.
 # --------------------------------------------------------------------------
 explicit_configs = [
-    # ---- propalpha=0.15 ----
-    {'graph_type': 'default', 'propalpha': 0.15, 'F_w': 3},
-    {'graph_type': 'geolayer', 'propalpha': 0.15, 'F_w': 3},
-    {'graph_type': 'rf', 'weight_mode': 'fixed', 'propalpha': 0.15, 'F_w': 3},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'propalpha': 0.15, 'F_w': 3},
-    # ---- propalpha=0.3 ----
-    {'graph_type': 'default', 'propalpha': 0.3, 'F_w': 3},
-    {'graph_type': 'geolayer', 'propalpha': 0.3, 'F_w': 3},
-    {'graph_type': 'rf', 'weight_mode': 'fixed', 'propalpha': 0.3, 'F_w': 3},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'propalpha': 0.3, 'F_w': 3},
+    # ---- propalpha=0.5 ----
+    {'graph_type': 'default', 'propalpha': 0.5, 'F_w': 3},
+    {'graph_type': 'geolayer', 'propalpha': 0.5, 'F_w': 3},
+    {'graph_type': 'rf', 'weight_mode': 'fixed', 'propalpha': 0.5, 'F_w': 3},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'propalpha': 0.5, 'F_w': 3},
 ]
 
 # Define variations for each parameter (Cartesian product — only used when explicit_configs is empty)
