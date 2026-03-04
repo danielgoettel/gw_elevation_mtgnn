@@ -27,8 +27,6 @@ def define_base_configuration():
         'feature_importance_multiplier' : 1,
         'n_pumps_connected' : 4,
         'weight_mode': 'fixed',  # 'fixed' or 'variable'
-        'ext_data' : True,
-        'multiply_exo_weights' : False,
         'layer_constrain' : False,
         'perturb_weights' : False,
         'exclude_evap_precip' : "Garg",
@@ -38,14 +36,10 @@ def define_base_configuration():
         'num_epochs': 200,
         'batch_size': 32,
         'F_w': 1,
-        'model_type': 'MTGNN',  # Options: 'MTGNN', 'MultigraphGNN', 'LSTM'
+        'model_type': 'MTGNN',  # Options: 'MTGNN', 'LSTM'
         'early_stopping_patience': 30,
         'min_delta': 0.001,
         'scheduler_patience': 10,
-
-        # MultigraphGNN parameters (only used when model_type='MultigraphGNN')
-        'num_relations': 5,
-        'rgcn_num_bases': None,  # basis decomposition (None = no decomposition)
 
         # Directed graph — piezo-piezo edges flow from higher to lower GW elevation
         'directed_graph': False,
@@ -66,6 +60,11 @@ def define_base_configuration():
 
         # Data resampling — 'W' for weekly, 'D' for daily, None for native 3-hourly
         'resampling_freq': 'W',
+
+        # Multi-support — Graph WaveNet-style parallel static + adaptive adjacency
+        'multi_support': False,
+        'adaptive_graph_type': 'rf',       # Source for adaptive init: 'rf', 'geolayer', 'default'
+        'adaptive_weight_mode': 'fixed',   # Weight mode for adaptive init (when adaptive_graph_type='rf')
     }
 
 # --------------------------------------------------------------------------
@@ -73,25 +72,15 @@ def define_base_configuration():
 # When this list is non-empty, parameter_variations is ignored.
 # --------------------------------------------------------------------------
 explicit_configs = [
-    # ---- Undirected runs with n_piezo=3 ----
-    {'graph_type': 'rf', 'weight_mode': 'fixed', 'layer_constrain': True, 'F_w': 4},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'F_w': 4},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.05, 'rf_weight_max': 0.3, 'F_w': 4},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'F_w': 4},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'rf_weight_min': 0.05, 'rf_weight_max': 0.3, 'F_w': 4},
-    # ---- Directed runs with n_piezo=3 ----
-    {'graph_type': 'default', 'directed_graph': True, 'F_w': 4},
-    {'graph_type': 'geolayer', 'directed_graph': True, 'F_w': 4},
-    {'graph_type': 'rf', 'weight_mode': 'fixed', 'directed_graph': True, 'F_w': 4},
-    {'graph_type': 'rf', 'weight_mode': 'fixed', 'layer_constrain': True, 'directed_graph': True, 'F_w': 4},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'directed_graph': True, 'F_w': 4},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.05, 'rf_weight_max': 0.3, 'directed_graph': True, 'F_w': 4},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'directed_graph': True, 'F_w': 4},
-    # ---- Undirected runs with n_piezo=4 ----
-    {'graph_type': 'default', 'F_w': 4, 'n_piezo_connected': 4},
-    {'graph_type': 'geolayer', 'F_w': 4, 'n_piezo_connected': 4},
-    {'graph_type': 'rf', 'weight_mode': 'fixed', 'F_w': 4, 'n_piezo_connected': 4},
-    {'graph_type': 'rf', 'weight_mode': 'fixed', 'layer_constrain': True, 'F_w': 4, 'n_piezo_connected': 4},
+    # ---- Full VIM runs with n_piezo=3 ----
+    {'graph_type': 'rf', 'weight_mode': 'full', 'rf_vim_min': 0.005, 'F_w': 4},
+    {'graph_type': 'rf', 'weight_mode': 'full', 'rf_vim_min': 0.01, 'F_w': 4},
+    {'graph_type': 'rf', 'weight_mode': 'full', 'rf_vim_min': 0.02, 'F_w': 4},
+    # ---- Full VIM runs with n_piezo=4 ----
+    {'graph_type': 'rf', 'weight_mode': 'full', 'rf_vim_min': 0.005, 'F_w': 4, 'n_piezo_connected': 4},
+    {'graph_type': 'rf', 'weight_mode': 'full', 'rf_vim_min': 0.01, 'F_w': 4, 'n_piezo_connected': 4},
+    {'graph_type': 'rf', 'weight_mode': 'full', 'rf_vim_min': 0.02, 'F_w': 4, 'n_piezo_connected': 4},
+    # ---- Undirected runs with n_piezo=4 (continued) ----
     {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'F_w': 4, 'n_piezo_connected': 4},
     {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.05, 'rf_weight_max': 0.3, 'F_w': 4, 'n_piezo_connected': 4},
     {'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'F_w': 4, 'n_piezo_connected': 4},
@@ -122,7 +111,6 @@ parameter_variations = {
   #'n_piezo_connected' : [4,6],
   #'n_pumps_connected' : [3],
   #'layer_constrain' : [False],
-  #'multiply_exo_weights' : [False],
   #'weight_mode' : ['fixed']
   #'skip_channels': [128, 256],
   #'W': [15],

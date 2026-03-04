@@ -61,9 +61,10 @@ class MixProp(nn.Module):
         alpha (float): Ratio of retaining the root nodes's original states, a value between 0 and 1.
     """
 
-    def __init__(self, c_in: int, c_out: int, gdep: int, dropout: float, alpha: float):
+    def __init__(self, c_in: int, c_out: int, gdep: int, dropout: float, alpha: float,
+                 num_supports: int = 1):
         super(MixProp, self).__init__()
-        self._mlp = Linear((gdep + 1) * c_in, c_out)
+        self._mlp = Linear((gdep * num_supports + 1) * c_in, c_out)
         self._gdep = gdep
         self._dropout = dropout
         self._alpha = alpha
@@ -77,27 +78,31 @@ class MixProp(nn.Module):
             else:
                 nn.init.uniform_(p)
 
-    def forward(self, X: torch.FloatTensor, A: torch.FloatTensor) -> torch.FloatTensor:
+    def forward(self, X: torch.FloatTensor, A) -> torch.FloatTensor:
         """
         Making a forward pass of mix-hop propagation.
 
         Arg types:
             * **X** (Pytorch Float Tensor) - Input feature Tensor, with shape (batch_size, c_in, num_nodes, seq_len).
-            * **A** (PyTorch Float Tensor) - Adjacency matrix, with shape (num_nodes, num_nodes).
+            * **A** (PyTorch Float Tensor or list of Float Tensors) - Adjacency matrix/matrices, each with shape (num_nodes, num_nodes).
 
         Return types:
             * **H_0** (PyTorch Float Tensor) - Hidden representation for all nodes, with shape (batch_size, c_out, num_nodes, seq_len).
         """
-        A = A + torch.eye(A.size(0)).to(X.device)
-        d = A.sum(1)
-        H = X
-        H_0 = X
-        A = A / d.view(-1, 1)
-        for _ in range(self._gdep):
-            H = self._alpha * X + (1 - self._alpha) * torch.einsum(
-                "ncwl,vw->ncvl", (H, A)
-            )
-            H_0 = torch.cat((H_0, H), dim=1)
+        if not isinstance(A, (list, tuple)):
+            A = [A]
+
+        H_0 = X  # original features — included once
+        for adj in A:
+            adj = adj + torch.eye(adj.size(0)).to(X.device)
+            d = adj.sum(1)
+            adj = adj / d.view(-1, 1)
+            H = X
+            for _ in range(self._gdep):
+                H = self._alpha * X + (1 - self._alpha) * torch.einsum(
+                    "ncwl,vw->ncvl", (H, adj)
+                )
+                H_0 = torch.cat((H_0, H), dim=1)
         H_0 = self._mlp(H_0)
         return H_0
 
@@ -331,6 +336,7 @@ class MTGNNLayer(nn.Module):
         gcn_depth: int,
         num_nodes: int,
         propalpha: float,
+        num_supports: int = 1,
     ):
         super(MTGNNLayer, self).__init__()
         self._dropout = dropout
@@ -381,11 +387,13 @@ class MTGNNLayer(nn.Module):
 
         if gcn_true:
             self._mixprop_conv1 = MixProp(
-                conv_channels, residual_channels, gcn_depth, dropout, propalpha
+                conv_channels, residual_channels, gcn_depth, dropout, propalpha,
+                num_supports=num_supports
             )
 
             self._mixprop_conv2 = MixProp(
-                conv_channels, residual_channels, gcn_depth, dropout, propalpha
+                conv_channels, residual_channels, gcn_depth, dropout, propalpha,
+                num_supports=num_supports
             )
 
         if seq_length > receptive_field:
@@ -443,8 +451,14 @@ class MTGNNLayer(nn.Module):
         X = F.dropout(X, self._dropout, training=training)
         X_skip = self._skip_conv(X) + X_skip
         if self._gcn_true:
-            X = self._mixprop_conv1(X, A_tilde) + self._mixprop_conv2(
-                X, A_tilde.transpose(1, 0)
+            if isinstance(A_tilde, (list, tuple)):
+                fwd_supports = A_tilde
+                bwd_supports = [a.transpose(1, 0) for a in A_tilde]
+            else:
+                fwd_supports = A_tilde
+                bwd_supports = A_tilde.transpose(1, 0)
+            X = self._mixprop_conv1(X, fwd_supports) + self._mixprop_conv2(
+                X, bwd_supports
             )
         else:
             X = self._residual_conv(X)
@@ -508,11 +522,13 @@ class MTGNN(nn.Module):
         tanhalpha: float,
         layer_norm_affline: bool,
         xd: Optional[int] = None,
+        multi_support: bool = False,
     ):
         super(MTGNN, self).__init__()
 
         self._gcn_true = gcn_true
         self._build_adj_true = build_adj
+        self._multi_support = multi_support
         self._num_nodes = num_nodes
         self._dropout = dropout
         self._seq_length = seq_length
@@ -521,9 +537,18 @@ class MTGNN(nn.Module):
 
         self._mtgnn_layers = nn.ModuleList()
 
+        # Number of parallel adjacency supports for MixProp
+        num_supports = 2 if (multi_support and gcn_true) else 1
+
         self._graph_constructor = GraphConstructor(
             num_nodes, subgraph_size, node_dim, alpha=tanhalpha, xd=xd
         )
+
+        # Learnable adaptive adjacency (used only when multi_support=True)
+        if multi_support:
+            self._adaptive_adj = nn.Parameter(
+                torch.randn(num_nodes, num_nodes) * 0.01
+            )
 
         self._set_receptive_field(dilation_exponential, kernel_size, layers)
 
@@ -548,6 +573,7 @@ class MTGNN(nn.Module):
                     gcn_depth=gcn_depth,
                     num_nodes=num_nodes,
                     propalpha=propalpha,
+                    num_supports=num_supports,
                 )
             )
 
@@ -630,6 +656,14 @@ class MTGNN(nn.Module):
         else:
             self._receptive_field = layers * (kernel_size - 1) + 1
 
+    def init_adaptive_adj(self, adj_matrix):
+        """Seed the adaptive adjacency from a pre-computed matrix (numpy array or tensor)."""
+        import numpy as np
+        if isinstance(adj_matrix, np.ndarray):
+            adj_matrix = torch.FloatTensor(adj_matrix)
+        with torch.no_grad():
+            self._adaptive_adj.copy_(adj_matrix)
+
     def forward(
         self,
         X_in: torch.FloatTensor,
@@ -660,11 +694,22 @@ class MTGNN(nn.Module):
             )
 
         if self._gcn_true:
-            if self._build_adj_true:
+            if self._multi_support:
+                # Multi-support: static A_tilde + learnable adaptive adjacency
+                A_adaptive = F.softmax(F.relu(self._adaptive_adj), dim=1)
+                supports = [A_tilde, A_adaptive]
+            elif self._build_adj_true:
+                # Original MTGNN: only adaptive (GraphConstructor)
                 if idx is None:
                     A_tilde = self._graph_constructor(self._idx.to(X_in.device), FE=FE)
                 else:
                     A_tilde = self._graph_constructor(idx, FE=FE)
+                supports = [A_tilde]
+            else:
+                # Only static
+                supports = [A_tilde]
+        else:
+            supports = None
 
         X = self._start_conv(X_in)
         X_skip = self._skip_conv_0(
@@ -673,11 +718,11 @@ class MTGNN(nn.Module):
         if idx is None:
             for mtgnn in self._mtgnn_layers:
                 X, X_skip = mtgnn(
-                    X, X_skip, A_tilde, self._idx.to(X_in.device), self.training
+                    X, X_skip, supports, self._idx.to(X_in.device), self.training
                 )
         else:
             for mtgnn in self._mtgnn_layers:
-                X, X_skip = mtgnn(X, X_skip, A_tilde, idx, self.training)
+                X, X_skip = mtgnn(X, X_skip, supports, idx, self.training)
 
         X_skip = self._skip_conv_E(X) + X_skip
         X = F.relu(X_skip)

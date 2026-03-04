@@ -59,7 +59,6 @@ RF_TRAINED_PIEZOS_ONLY = PREPROCESSED_DIR / "raw_piezo_only_importances.pkl"
 
 # Output files
 ADJ_MATRIX_PATH = PREPROCESSED_DIR / "adj_matrix.pt"
-PYG_GRAPH_PATH = PREPROCESSED_DIR / "pyg_graph.pt"
 STATIC_FEATURES_PATH = PREPROCESSED_DIR / "static_features.pt"
 PROCESSED_DATA_FILE = PREPROCESSED_DIR / "processed_data.pkl"
 COLUMN_NAMES_REAL = PREPROCESSED_DIR / "column_names_real.txt"

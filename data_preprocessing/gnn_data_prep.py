@@ -13,7 +13,6 @@ import random
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.impute import SimpleImputer
 from sklearn.metrics.pairwise import pairwise_distances
-from data_preprocessing.pyg_graph import dense_adj_to_pyg, save_pyg_graph
 from datetime import datetime
 
 from config import (
@@ -462,7 +461,7 @@ def generate_layer_constrained_adjacency_matrix(
     return adj_matrix  # Symmetric adjacency matrix
 """
 
-def generate_fixed_layer_constrained_rf_adjacency_matrix_layer(
+def generate_rf_adjacency_fixed(
     piezo_columns: list,
     all_coords: np.ndarray,
     num_piezo: int,
@@ -472,21 +471,15 @@ def generate_fixed_layer_constrained_rf_adjacency_matrix_layer(
     num_river: int,
     n_top_connections: int = 3,
     n_pumps_connected: int = 4,
-    ignore_layers = True
+    layer_constrain: bool = False
 ) -> np.ndarray:
     """
-    #NOTE THIS DOESN'T ESTABLISH EXO WEIGHT CONNECTIONS THROUGH RF, POSSIBLY TRY THAT
-    Generate adjacency matrix using RF feature importance between piezometers only.
-    Piezo→piezo edges: top-n same-layer peers (fixed weight 0.1).
-    Optionally adds edges to exogenous nodes based on spatial proximity:
-      - pumps (0.2), precipitation (0.3), evaporation (0.4), rivers (0.5).
+    Generate adjacency matrix using RF feature importance with fixed edge weights.
+    Piezo→piezo edges: top-n peers (fixed weight 0.1), optionally constrained to same geolayer.
+    Exogenous edges use fixed weights: pumps (0.2), precipitation (0.3), evaporation (0.4), rivers (0.5).
     """
     num_nodes = all_coords.shape[0]
     adj_matrix = np.zeros((num_nodes, num_nodes), dtype=float)
-
-    # Load layer labels for piezometers
-    df_layers = pd.read_csv(PIEZO_LAYER_INFORMATION).set_index('name')
-    piezo_labels = df_layers.loc[piezo_columns, "geolayer"].fillna('MISSING').values
 
     # Load RF importance matrix (P×P)
     rf_feature_importance = joblib.load(RF_TRAINED_PIEZOS_ONLY)
@@ -496,264 +489,60 @@ def generate_fixed_layer_constrained_rf_adjacency_matrix_layer(
             f"Expected RF importances shape ({num_piezo},{num_piezo}), got {rf_feature_importance.shape}"
         )
 
-    # Read closest pumps for exogenous
+    # Load layer labels if constraining to same layer
+    piezo_labels = None
+    if layer_constrain:
+        df_layers = pd.read_csv(PIEZO_LAYER_INFORMATION).set_index('name')
+        piezo_labels = df_layers.loc[piezo_columns, "geolayer"].fillna('MISSING').values
+
+    # Read closest pumps
     closest_pumps = get_n_closest_pumps_indices(
-        n_pumps_connected,
-        num_piezo,
-        pump_distances_file=PUMP_DISTANCES
+        n_pumps_connected, num_piezo, pump_distances_file=PUMP_DISTANCES
     )
 
-    # 1) Piezo→piezo: top-n importances among same-layer peers
+    # 1) Piezo→piezo: top-n importances (optionally among same-layer peers)
     for i in range(num_piezo):
-        peers = [j for j in range(num_piezo)
-                 if j != i and piezo_labels[j] == piezo_labels[i]]
-        if not peers:
-            continue
-        weights = rf_feature_importance[i, peers]
-        topk_rel = np.argsort(weights)[-n_top_connections:][::-1]
-        selected = [peers[idx] for idx in topk_rel]
+        if layer_constrain:
+            candidates = [j for j in range(num_piezo)
+                          if j != i and piezo_labels[j] == piezo_labels[i]]
+            if not candidates:
+                continue
+            weights = rf_feature_importance[i, candidates]
+            topk_rel = np.argsort(weights)[-n_top_connections:][::-1]
+            selected = [candidates[idx] for idx in topk_rel]
+        else:
+            row = rf_feature_importance[i]
+            selected = np.argsort(row)[-n_top_connections:][::-1].tolist()
         for j in selected:
             adj_matrix[i, j] = 0.1
 
-    # 2) Exogenous connections (pumps, etc.)
+    # 2) Exogenous connections
     for i in range(num_piezo):
-        # pumps
         pump_idxs = closest_pumps[i].tolist()
         adj_matrix[i, pump_idxs] = 0.2
 
-        # distances to all nodes
         dist = np.linalg.norm(all_coords[i] - all_coords, axis=1)
 
-        #if not ignore_layers
-        # precipitation
         if num_prec > 0:
-            prec_slice = dist[num_piezo + num_pump:num_piezo + num_pump + num_prec]
-            prec_idx = num_piezo + num_pump + np.argmin(prec_slice)
+            prec_start = num_piezo + num_pump
+            prec_idx = prec_start + np.argmin(dist[prec_start:prec_start + num_prec])
             adj_matrix[i, prec_idx] = 0.3
 
-        # evaporation
         if num_evap > 0:
-            evap_slice = dist[num_piezo + num_pump + num_prec:
-                               num_piezo + num_pump + num_prec + num_evap]
-            evap_idx = num_piezo + num_pump + num_prec + np.argmin(evap_slice)
+            evap_start = num_piezo + num_pump + num_prec
+            evap_idx = evap_start + np.argmin(dist[evap_start:evap_start + num_evap])
             adj_matrix[i, evap_idx] = 0.4
 
-        # rivers (two closest)
         if num_river > 0:
-            river_slice = dist[-num_river:]
-            two = np.argsort(river_slice)[:2] + (num_nodes - num_river)
+            river_start = num_nodes - num_river
+            river_slice = dist[river_start:]
+            two = np.argsort(river_slice)[:2] + river_start
             adj_matrix[i, two] = 0.5
 
     adj_matrix = np.maximum(adj_matrix, adj_matrix.T)
-    return adj_matrix # Symmetric adjacency matrix
-
-def generate_rf_adjacency_matrix(
-        piezo_columns: list,
-        all_coords: np.ndarray,
-        num_piezo: int,
-        num_pump: int,
-        num_prec: int,
-        num_evap: int,
-        num_river: int,
-        n_top_connections: int = 3,
-        n_pumps_connected: int = 4
-) -> np.ndarray:
-    """
-    Generate adjacency matrix using Random Forest feature importance between piezometers only.
-    Optionally adds edges to exogenous nodes based on spatial proximity.
-
-    Parameters:
-    - time_series_df: DataFrame with time series for all piezometers (columns = piezo IDs)
-    - piezo_columns: list of piezometer column names
-    - all_coords: np.array of shape (N, 2) with X, Y for all nodes
-    - num_piezo, num_pump, ..., num_river: counts of each node type
-    - n_top_connections: number of strongest connections to retain per node
-    - percentage: optionally limit connections to % of total nodes
-
-    Returns:
-    - Adjacency matrix (numpy array)
-    """
-    num_nodes = all_coords.shape[0]
-    adj_matrix = np.zeros((num_nodes, num_nodes), dtype=float)
-
-    # Read pump distances
-    pumps = pd.read_csv(PUMP_DISTANCES, header=0, index_col=0)
-    closest_pumps = get_n_closest_pumps_indices(n_pumps_connected, num_piezo, pump_distances_file=PUMP_DISTANCES)
-
-    # 1) Load your saved P×P importance matrix
-    rf_feature_importance = joblib.load(RF_TRAINED_PIEZOS_ONLY)  # shape (P, P)
-    P = rf_feature_importance.shape[0]
-    if P != len(piezo_columns):
-        raise ValueError(
-            f"Expected RF importances of shape ({len(piezo_columns)},{len(piezo_columns)}), "
-            f"got {rf_feature_importance.shape}"
-        )
-
-    # 2) For each piezo i, keep its top-n importances to other piezos
-    for i in range(P):
-        row = rf_feature_importance[i]
-        # indices of the n largest values in row
-        top_idxs = np.argsort(row)[-n_top_connections:][::-1]
-        # assign scaled importances
-        for j in top_idxs:
-            adj_matrix[i, j] = 0.1
-
-    # Add connections to exogenous nodes (pumps, etc.)
-
-    selected_indices = range(num_nodes)
-
-    for i in selected_indices:
-        if i < num_piezo:
-            dist_matrix = np.linalg.norm(all_coords[i] - all_coords, axis=1)
-            pump_indices = closest_pumps[i].tolist()
-            prec_index = num_piezo + num_pump + np.argmin(
-                dist_matrix[num_piezo + num_pump: num_piezo + num_pump + num_prec])
-            evap_index = num_piezo + num_pump + num_prec + np.argmin(
-                dist_matrix[num_piezo + num_pump + num_prec: num_piezo + num_pump + num_prec + num_evap])
-            river_indices = np.argsort(dist_matrix[-num_river:])[:2] + (num_nodes - num_river)
-
-            adj_matrix[i, pump_indices] = 0.2
-            adj_matrix[i, prec_index] = 0.3
-            adj_matrix[i, evap_index] = 0.4
-            adj_matrix[i, river_indices] = 0.5
-
-    adj_matrix = np.maximum(adj_matrix, adj_matrix.T)
-    return adj_matrix # Symmetric adjacency matrix
-
-def generate_rf_adjacency_variable_weights_matrix_layer_constrained(
-        piezo_columns: list,
-        all_coords: np.ndarray,
-        num_piezo: int,
-        num_pump: int,
-        num_prec: int,
-        num_evap: int,
-        num_river: int,
-        n_top_connections: int = 3,
-        feature_importance_multiplier: float = 1.0,
-        n_pumps_connected: int = 4,
-        multiply_exo_weights = True,
-        rf_piezo_scale = True,
-        rf_weight_min: float = 0.08,
-        rf_weight_max: float = 0.2
-) -> np.ndarray:
-    """
-    Generate adjacency matrix using Random Forest feature importance between all nodes.
-    Piezo→piezo edges only connect to the top-n same-layer peers. Exogenous edges use RF weights.
-    """
-    # load the FULL RF matrix (must be N×N)
-    rf_full = joblib.load(RF_TRAINED_ALL)  # shape (N, N)
-    N = rf_full.shape[0]
-    if rf_full.shape != (N, N):
-        raise ValueError(f"Expected full RF matrix of shape ({N},{N}), got {rf_full.shape}")
-
-
-    # scale once
-    #rf_full = rf_full * feature_importance_multiplier
-    nonzero = rf_full[rf_full > 0]
-    if nonzero.size == 0:
-      raise ValueError("No nonzero importances found in rf_full.")
-
-    min_w, max_w = nonzero.min(), nonzero.max()
-
-    # 2. build a scaled copy (zeros stay zero)
-    if rf_piezo_scale:
-      rf_scaled = np.zeros_like(rf_full)
-      rf_scaled[rf_full > 0] = (
-          (rf_full[rf_full > 0] - min_w)
-          / (max_w - min_w)
-          * (rf_weight_max - rf_weight_min)
-          + rf_weight_min
-      )
-      print(f"RF piezo weights scaled to [{rf_weight_min}, {rf_weight_max}]")
-
-      # 3. use rf_scaled instead of rf_full
-      rf_full = rf_scaled
-
-
-    # load layer labels for piezo nodes
-    df_layers = pd.read_csv(PIEZO_LAYER_INFORMATION).set_index('name')
-    piezo_labels = df_layers.loc[piezo_columns, "geolayer"].fillna('MISSING').values
-
-    # prepare adjacency and distance matrix
-    adj_matrix = np.zeros((N, N), dtype=float)
-    dmat = pairwise_distances(all_coords)
-
-    # read closest pumps
-    closest_pumps = get_n_closest_pumps_indices(n_pumps_connected, num_piezo, pump_distances_file=PUMP_DISTANCES)
-
-    # piezo→piezo: top-k within same layer
-    for i in range(num_piezo):
-        # find same-layer peers
-        peers = [j for j in range(num_piezo) if j != i and piezo_labels[j] == piezo_labels[i]]
-        if not peers:
-            continue
-        weights = rf_full[i, peers]
-        # pick the top-n weights
-        topk_idx = np.argsort(weights)[-n_top_connections:][::-1]
-        selected = [peers[k] for k in topk_idx]
-        adj_matrix[i, selected] = weights[topk_idx] * feature_importance_multiplier  #IS THIS ACTUALLY ASSIGNING PROPER WEIGHTS?
-
-    # compute global start indices
-    start_pump = num_piezo
-    start_prec = start_pump + num_pump
-    start_evap = start_prec + num_prec
-    start_river = start_evap + num_evap
-
-    for i in range(num_piezo):
-    # 1) pumps
-      pump_idxs = np.array(closest_pumps[i], dtype=int)
-      #print(f"i={i}: pump_idxs = {pump_idxs}")
-      #if len(pump_idxs) == 0:
-      #    print(f"  >> WARNING: no pumps connected to piezo {i}")
-      adj_matrix[i, pump_idxs] = 0.2 #Set multiply_ex0_weights to false for original exo weights to remain
-      if multiply_exo_weights: adj_matrix[i, pump_idxs] *= 10
-
-      # 2) compute distances
-      dist = np.linalg.norm(all_coords[i] - all_coords, axis=1)
-      #print(f"i={i}: dist.shape = {dist.shape}")
-
-      # 3) precipitation
-      if num_prec > 0:
-          start = num_piezo + num_pump
-          prec_slice = dist[start : start + num_prec]
-          #print(f"  prec_slice ({start}:{start+num_prec}) =", prec_slice)
-          prec_rel_idx = np.argmin(prec_slice)
-          prec_idx = start + prec_rel_idx
-          #print(f"  prec_idx = {prec_idx}")
-          adj_matrix[i, prec_idx] = 0.3
-          if multiply_exo_weights: adj_matrix[i, prec_idx] *= 10 #MULT HERE ALREADY
-
-      # 4) evaporation
-      if num_evap > 0:
-          start = num_piezo + num_pump + num_prec
-          evap_slice = dist[start : start + num_evap]
-          #print(f"  evap_slice ({start}:{start+num_evap}) =", evap_slice)
-          evap_rel_idx = np.argmin(evap_slice)
-          evap_idx = start + evap_rel_idx
-          #print(f"  evap_idx = {evap_idx}")
-          adj_matrix[i, evap_idx] = 0.4
-          if multiply_exo_weights: adj_matrix[i, evap_idx] *= 10
-
-      if num_river > 0:
-          # take the num_river entries starting at start_river
-          river_slice = dist[start_river : start_river + num_river]
-          # pick the two closest (smallest distance)
-          two_rel = np.argsort(river_slice)[:2]
-          # convert back to absolute indices
-          river_idxs = start_river + two_rel
-          adj_matrix[i, river_idxs] = 0.5
-          if multiply_exo_weights:
-              adj_matrix[i, river_idxs] *= 10
-
-    # symmetrize
-    #adj_matrix = np.maximum(adj_matrix, adj_matrix.T)
     return adj_matrix
-                    
 
-    # finally symmetrize and return
-    return np.maximum(adj, adj.T)
-
-def generate_rf_adjacency_variable_weights_matrix(
+def generate_rf_adjacency_variable(
         piezo_columns: list,
         all_coords: np.ndarray,
         num_piezo: int,
@@ -764,15 +553,17 @@ def generate_rf_adjacency_variable_weights_matrix(
         n_top_connections: int = 3,
         feature_importance_multiplier: float = 1.0,
         n_pumps_connected: int = 4,
-        multiply_exo_weights = True,
         rf_weight_min: float = 0.08,
-        rf_weight_max: float = 0.2
+        rf_weight_max: float = 0.2,
+        layer_constrain: bool = False
 ) -> np.ndarray:
     """
-    Generate adjacency matrix using Random Forest feature importance between all nodes.
-    Piezo→piezo and piezo→exo edges all pull weights from the RF matrix.
+    Generate adjacency matrix using RF feature importance with variable (scaled) edge weights.
+    Piezo→piezo edges: top-n peers by RF importance, weighted by scaled RF values.
+    Optionally constrained to same geolayer when layer_constrain=True.
+    Exogenous edges use fixed weights: pumps (0.2), precipitation (0.3), evaporation (0.4), rivers (0.5).
     """
-    # — load the FULL RF matrix (must be N×N) —
+    # Load the FULL RF matrix (N×N)
     raw_rf = joblib.load(RF_TRAINED_ALL)
     if isinstance(raw_rf, pd.DataFrame):
         rf_full = raw_rf.values.astype(float)
@@ -785,93 +576,81 @@ def generate_rf_adjacency_variable_weights_matrix(
     if rf_full.shape != (N, N):
         raise ValueError(f"Expected full RF matrix shape ({N},{N}), got {rf_full.shape}")
 
-    # Scale RF weights to configured range
+    # Scale RF weights to configured range [rf_weight_min, rf_weight_max]
     nonzero = rf_full[rf_full > 0]
-    if nonzero.size > 0:
-        min_w, max_w = nonzero.min(), nonzero.max()
-        rf_scaled = np.zeros_like(rf_full)
-        rf_scaled[rf_full > 0] = (
-            (rf_full[rf_full > 0] - min_w)
-            / (max_w - min_w)
-            * (rf_weight_max - rf_weight_min)
-            + rf_weight_min
-        )
-        rf_full = rf_scaled
-
-    print("RF matrix shape:", rf_full.shape)
+    if nonzero.size == 0:
+        raise ValueError("No nonzero importances found in RF matrix.")
+    min_w, max_w = nonzero.min(), nonzero.max()
+    rf_scaled = np.zeros_like(rf_full)
+    rf_scaled[rf_full > 0] = (
+        (rf_full[rf_full > 0] - min_w)
+        / (max_w - min_w)
+        * (rf_weight_max - rf_weight_min)
+        + rf_weight_min
+    )
+    rf_full = rf_scaled
     print(f"RF piezo weights scaled to [{rf_weight_min}, {rf_weight_max}]")
-    print("Piezo count:", num_piezo, "Pump:", num_pump,
-      "Prec:", num_prec, "Evap:", num_evap, "River:", num_river)
 
-    # prep
-    adj = np.zeros((N, N), dtype=float)
-    dmat = pairwise_distances(all_coords)  # (N,N) Euclidean
+    # Load layer labels if constraining to same layer
+    piezo_labels = None
+    if layer_constrain:
+        df_layers = pd.read_csv(PIEZO_LAYER_INFORMATION).set_index('name')
+        piezo_labels = df_layers.loc[piezo_columns, "geolayer"].fillna('MISSING').values
 
-    # Read pump distances
-    pumps = pd.read_csv(PUMP_DISTANCES, header=0, index_col=0)
-    closest_pumps = get_n_closest_pumps_indices(n_pumps_connected, num_piezo, pump_distances_file=PUMP_DISTANCES)
+    # Prepare adjacency
+    adj_matrix = np.zeros((N, N), dtype=float)
+    closest_pumps = get_n_closest_pumps_indices(
+        n_pumps_connected, num_piezo, pump_distances_file=PUMP_DISTANCES
+    )
 
-    # piezo→piezo top‐k
+    # Piezo→piezo: top-k (optionally within same layer)
     for i in range(num_piezo):
-        row = rf_full[i, :num_piezo]  # only piezo→piezo block
-        topk = np.argsort(row)[-n_top_connections:][::-1]
-        adj[i, topk] = row[topk]
+        if layer_constrain:
+            candidates = [j for j in range(num_piezo)
+                          if j != i and piezo_labels[j] == piezo_labels[i]]
+            if not candidates:
+                continue
+            weights = rf_full[i, candidates]
+            topk_idx = np.argsort(weights)[-n_top_connections:][::-1]
+            selected = [candidates[k] for k in topk_idx]
+            adj_matrix[i, selected] = weights[topk_idx] * feature_importance_multiplier
+        else:
+            row = rf_full[i, :num_piezo].copy()
+            row[i] = 0  # no self-loops
+            topk = np.argsort(row)[-n_top_connections:][::-1]
+            adj_matrix[i, topk] = row[topk] * feature_importance_multiplier
 
-    # pre‐compute the global start indices
+    # Exogenous connections with fixed weights
     start_pump = num_piezo
     start_prec = start_pump + num_pump
     start_evap = start_prec + num_prec
     start_river = start_evap + num_evap
 
     for i in range(num_piezo):
-        # — n closest pumps, RF weights —
+        # Pumps
         pump_idxs = np.array(closest_pumps[i], dtype=int)
-        adj[i, pump_idxs] = np.maximum(
-            adj[i, pump_idxs],
-            rf_full[i, pump_idxs]
-        )
-        if multiply_exo_weights: adj[i, pump_idxs] *=2 * 10^4
-        else: adj[i, pump_idxs] = 0.2 #YOLO seriously probably just scale originally and then mult. 
+        adj_matrix[i, pump_idxs] = 0.2
 
-        # — closest precip, RF weight —
-        prec_idx = start_prec + np.argmin(
-            dmat[i, start_prec: start_prec + num_prec]
-        )
-        adj[i, prec_idx] = max(adj[i, prec_idx],
-                                rf_full[i, prec_idx])
-        if multiply_exo_weights: adj[i, evap_idx] *= 3 * 10^4
-        else: adj[i, prec_idx] = 0.3
+        dist = np.linalg.norm(all_coords[i] - all_coords, axis=1)
 
-        # — closest evap, RF weight —
-        evap_idx = start_evap + np.argmin(
-            dmat[i, start_evap: start_evap + num_evap]
-        )
-        adj[i, evap_idx] = max(adj[i, evap_idx],
-                                rf_full[i, evap_idx])
-        if multiply_exo_weights: adj[i, evap_idx] *= 4 * 10^4
-        else: adj[i, evap_idx] = 0.4
+        # Precipitation
+        if num_prec > 0:
+            prec_idx = start_prec + np.argmin(dist[start_prec:start_prec + num_prec])
+            adj_matrix[i, prec_idx] = 0.3
 
-        # — two closest rivers, RF weights —
-        riv_slice = dmat[i, start_river: start_river + num_river]
-        two_rivs = np.argsort(riv_slice)[:2] + start_river
-        for r in two_rivs:
-            adj[i, r] = max(adj[i, r],
-                            rf_full[i, r])
-            if multiply_exo_weights: adj[i, r] *= 5 * 10^4
-            else: adj[i, r] = 0.5
+        # Evaporation
+        if num_evap > 0:
+            evap_idx = start_evap + np.argmin(dist[start_evap:start_evap + num_evap])
+            adj_matrix[i, evap_idx] = 0.4
 
-    # Debug: print final adjacency weights (after exo overwrite)
-    print("Final adj weights for piezo 0 → pumps:",
-      adj[0, start_pump:start_pump+num_pump])
-    print("Final adj weights for piezo 0 → precip:",
-      adj[0, start_prec:start_prec+num_prec])
-    print("Final adj weights for piezo 0 → evap:",
-      adj[0, start_evap:start_evap+num_evap])
-    print("Final adj weights for piezo 0 → rivers:",
-      adj[0, start_river:start_river+num_river])
+        # Rivers (two closest)
+        if num_river > 0:
+            river_slice = dist[start_river:start_river + num_river]
+            two_rivs = np.argsort(river_slice)[:2] + start_river
+            adj_matrix[i, two_rivs] = 0.5
 
-    # finally symmetrize by taking the max of (i,j) and (j,i)
-    return np.maximum(adj, adj.T)
+    adj_matrix = np.maximum(adj_matrix, adj_matrix.T)
+    return adj_matrix
 
 
 def generate_rf_full_vim_matrix(
@@ -886,15 +665,15 @@ def generate_rf_full_vim_matrix(
         n_top_connections: int = None,
         n_pumps_connected: int = 4,
         feature_importance_multiplier: float = 1.0,
-        multiply_exo_weights=False,
         rf_weight_min: float = 0.08,
         rf_weight_max: float = 0.2
 ) -> np.ndarray:
     """
     Full RF adjacency: keep ALL piezo-piezo connections where
     RF importance >= vim_min. Optionally also limit to top-N per node.
+    Exogenous edges use fixed weights: pumps (0.2), precipitation (0.3), evaporation (0.4), rivers (0.5).
     """
-    # — load the FULL RF matrix (must be N×N) —
+    # Load the FULL RF matrix (N×N)
     raw_rf = joblib.load(RF_TRAINED_ALL)
     if isinstance(raw_rf, pd.DataFrame):
         rf_full = raw_rf.values.astype(float)
@@ -920,20 +699,17 @@ def generate_rf_full_vim_matrix(
         )
         rf_full = rf_scaled
 
-    print("RF matrix shape:", rf_full.shape)
     print(f"RF piezo weights scaled to [{rf_weight_min}, {rf_weight_max}]")
     print(f"VIM threshold: {vim_min}, top-N cap: {n_top_connections}")
-    print("Piezo count:", num_piezo, "Pump:", num_pump,
-      "Prec:", num_prec, "Evap:", num_evap, "River:", num_river)
 
-    # prep
+    # Prepare adjacency
     adj = np.zeros((N, N), dtype=float)
-    dmat = pairwise_distances(all_coords)  # (N,N) Euclidean
+    dmat = pairwise_distances(all_coords)
+    closest_pumps = get_n_closest_pumps_indices(
+        n_pumps_connected, num_piezo, pump_distances_file=PUMP_DISTANCES
+    )
 
-    # Read pump distances
-    closest_pumps = get_n_closest_pumps_indices(n_pumps_connected, num_piezo, pump_distances_file=PUMP_DISTANCES)
-
-    # piezo→piezo: VIM threshold + optional top-N cap
+    # Piezo→piezo: VIM threshold + optional top-N cap
     conn_counts = []
     for i in range(num_piezo):
         row = rf_full[i, :num_piezo].copy()
@@ -951,54 +727,35 @@ def generate_rf_full_vim_matrix(
     print(f"Piezo-piezo connections per node: min={min(conn_counts)}, "
           f"max={max(conn_counts)}, mean={np.mean(conn_counts):.1f}")
 
-    # pre-compute the global start indices
+    # Exogenous connections with fixed weights
     start_pump = num_piezo
     start_prec = start_pump + num_pump
     start_evap = start_prec + num_prec
     start_river = start_evap + num_evap
 
     for i in range(num_piezo):
-        # — n closest pumps —
+        # Pumps
         pump_idxs = np.array(closest_pumps[i], dtype=int)
-        adj[i, pump_idxs] = np.maximum(
-            adj[i, pump_idxs],
-            rf_full[i, pump_idxs]
-        )
         adj[i, pump_idxs] = 0.2
 
-        # — closest precip —
-        prec_idx = start_prec + np.argmin(
-            dmat[i, start_prec: start_prec + num_prec]
-        )
-        adj[i, prec_idx] = max(adj[i, prec_idx], rf_full[i, prec_idx])
-        adj[i, prec_idx] = 0.3
+        # Precipitation
+        if num_prec > 0:
+            prec_idx = start_prec + np.argmin(dmat[i, start_prec:start_prec + num_prec])
+            adj[i, prec_idx] = 0.3
 
-        # — closest evap —
-        evap_idx = start_evap + np.argmin(
-            dmat[i, start_evap: start_evap + num_evap]
-        )
-        adj[i, evap_idx] = max(adj[i, evap_idx], rf_full[i, evap_idx])
-        adj[i, evap_idx] = 0.4
+        # Evaporation
+        if num_evap > 0:
+            evap_idx = start_evap + np.argmin(dmat[i, start_evap:start_evap + num_evap])
+            adj[i, evap_idx] = 0.4
 
-        # — two closest rivers —
-        riv_slice = dmat[i, start_river: start_river + num_river]
-        two_rivs = np.argsort(riv_slice)[:2] + start_river
-        for r in two_rivs:
-            adj[i, r] = max(adj[i, r], rf_full[i, r])
-            adj[i, r] = 0.5
+        # Rivers (two closest)
+        if num_river > 0:
+            riv_slice = dmat[i, start_river:start_river + num_river]
+            two_rivs = np.argsort(riv_slice)[:2] + start_river
+            adj[i, two_rivs] = 0.5
 
-    # Debug: print final adjacency weights (after exo overwrite)
-    print("Final adj weights for piezo 0 → pumps:",
-      adj[0, start_pump:start_pump+num_pump])
-    print("Final adj weights for piezo 0 → precip:",
-      adj[0, start_prec:start_prec+num_prec])
-    print("Final adj weights for piezo 0 → evap:",
-      adj[0, start_evap:start_evap+num_evap])
-    print("Final adj weights for piezo 0 → rivers:",
-      adj[0, start_river:start_river+num_river])
-
-    # finally symmetrize by taking the max of (i,j) and (j,i)
-    return np.maximum(adj, adj.T)
+    adj = np.maximum(adj, adj.T)
+    return adj
 
 
 import numpy as np
@@ -1071,7 +828,7 @@ def load_and_concatenate_metadata(piezo_metadata_path, pump_metadata_path, evap_
     )
 
 
-def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, percentage=None, n_piezo_connected=3, feature_importance_multiplier = None, n_pumps_connected = 4, weight_mode = 'fixed', same_layer = False, same_layer_kwargs = None, ext_data = True, multiply_exo_weights = False, directed_graph=False, mean_gw_elevation=None, rf_weight_min=0.08, rf_weight_max=0.2, rf_vim_min=0.01):
+def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, percentage=None, n_piezo_connected=3, feature_importance_multiplier = None, n_pumps_connected = 4, weight_mode = 'fixed', same_layer = False, directed_graph=False, mean_gw_elevation=None, rf_weight_min=0.08, rf_weight_max=0.2, rf_vim_min=0.01):
     # Paths to the metadata files (update these paths according to your folder structure)
 
     metadata_path = PIEZO_METADATA
@@ -1135,17 +892,26 @@ def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, perce
         np.save(GENERATED_GRAPHS / f"{graph_tag}.npy", adj_matrix)
     elif graph_type == 'rf':
           if weight_mode == 'fixed':
-            if same_layer:
-              adj_matrix = generate_fixed_layer_constrained_rf_adjacency_matrix_layer(df_piezo_columns, coordinates, num_piezo, num_pump, num_prec, num_evap, num_river, n_piezo_connected, n_pumps_connected)
-            else:
-              adj_matrix = generate_rf_adjacency_matrix(df_piezo_columns, coordinates, num_piezo, num_pump, num_prec, num_evap, num_river, n_piezo_connected, n_pumps_connected)
+              adj_matrix = generate_rf_adjacency_fixed(
+                  df_piezo_columns, coordinates, num_piezo, num_pump, num_prec,
+                  num_evap, num_river, n_piezo_connected, n_pumps_connected,
+                  layer_constrain=same_layer)
           elif weight_mode == 'variable':
-            if same_layer:
-              adj_matrix = generate_rf_adjacency_variable_weights_matrix_layer_constrained(df_piezo_columns, coordinates, num_piezo, num_pump, num_prec, num_evap, num_river, n_top_connections=n_piezo_connected, n_pumps_connected=n_pumps_connected, feature_importance_multiplier=feature_importance_multiplier, multiply_exo_weights=multiply_exo_weights, rf_weight_min=rf_weight_min, rf_weight_max=rf_weight_max)
-            else:
-              adj_matrix = generate_rf_adjacency_variable_weights_matrix(df_piezo_columns, coordinates, num_piezo, num_pump, num_prec, num_evap, num_river, n_top_connections=n_piezo_connected, n_pumps_connected=n_pumps_connected, feature_importance_multiplier=feature_importance_multiplier, multiply_exo_weights=multiply_exo_weights, rf_weight_min=rf_weight_min, rf_weight_max=rf_weight_max)
+              adj_matrix = generate_rf_adjacency_variable(
+                  df_piezo_columns, coordinates, num_piezo, num_pump, num_prec,
+                  num_evap, num_river, n_top_connections=n_piezo_connected,
+                  feature_importance_multiplier=feature_importance_multiplier,
+                  n_pumps_connected=n_pumps_connected,
+                  rf_weight_min=rf_weight_min, rf_weight_max=rf_weight_max,
+                  layer_constrain=same_layer)
           elif weight_mode == 'full':
-            adj_matrix = generate_rf_full_vim_matrix(df_piezo_columns, coordinates, num_piezo, num_pump, num_prec, num_evap, num_river, vim_min=rf_vim_min, n_top_connections=n_piezo_connected if n_piezo_connected != 3 else None, n_pumps_connected=n_pumps_connected, feature_importance_multiplier=feature_importance_multiplier, multiply_exo_weights=multiply_exo_weights, rf_weight_min=rf_weight_min, rf_weight_max=rf_weight_max)
+              adj_matrix = generate_rf_full_vim_matrix(
+                  df_piezo_columns, coordinates, num_piezo, num_pump, num_prec,
+                  num_evap, num_river, vim_min=rf_vim_min,
+                  n_top_connections=n_piezo_connected if n_piezo_connected != 3 else None,
+                  n_pumps_connected=n_pumps_connected,
+                  feature_importance_multiplier=feature_importance_multiplier,
+                  rf_weight_min=rf_weight_min, rf_weight_max=rf_weight_max)
           np.save(GENERATED_GRAPHS / f"{graph_tag}.npy", adj_matrix)
 
     else:
@@ -1167,12 +933,7 @@ def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, perce
     adj_matrix_tensor = torch.tensor(adj_matrix).float()
     static_features_tensor = static_features.clone().detach()
 
-    # Also produce PyG sparse graph format (edge_index, edge_type, edge_weight)
-    pyg_graph = dense_adj_to_pyg(adj_matrix, num_piezo, num_pump, num_prec, num_evap, num_river)
-    save_pyg_graph(pyg_graph, base_data_path / 'pyg_graph.pt')
-    print(f"PyG graph: {pyg_graph['edge_index'].shape[1]} edges, {pyg_graph['num_relations']} relation types")
-
-    return adj_matrix_tensor, static_features_tensor, pyg_graph
+    return adj_matrix_tensor, static_features_tensor
 
 if __name__ == "__main__":
     main()

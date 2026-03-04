@@ -22,7 +22,7 @@ def prepare_combined_input(input_seq, external_forces, modeltype='MTGNN'):
     # Concatenate padded input sequence with external forces along the feature dimension
     combined_input = torch.cat([input_seq_padded, external_forces], dim=2)
 
-    if modeltype in ('MTGNN', 'MultigraphGNN'):
+    if modeltype == 'MTGNN':
         # Reshape: (B, T, N) -> (B, 1, N, T)
         combined_input = combined_input.permute(0, 2, 1).unsqueeze(1)
     else:
@@ -33,8 +33,7 @@ def prepare_combined_input(input_seq, external_forces, modeltype='MTGNN'):
     return combined_input.to(device)
 
 def make_predictions(model, sample, device, F_w, W, A_tilde, static_features, num_piezo,
-                     build_adj=False, modeltype='MTGNN', perturb=False, noise_level=0.01,
-                     edge_index=None, edge_type=None, edge_weight=None):
+                     build_adj=False, modeltype='MTGNN', perturb=False, noise_level=0.01):
     input_sequence, external_forces, target_sequence, _ = sample
 
     # Move the data to the device (CPU or CUDA)
@@ -58,9 +57,6 @@ def make_predictions(model, sample, device, F_w, W, A_tilde, static_features, nu
 
             if modeltype == 'MTGNN':
                 output = model(combined_input, A_tilde.to(device), FE=static_features.to(device)) if not build_adj else model(combined_input, FE=static_features.to(device))
-                output = output[:, :, :num_piezo, 0]
-            elif modeltype == 'MultigraphGNN':
-                output = model(combined_input, edge_index, edge_type, edge_weight)
                 output = output[:, :, :num_piezo, 0]
             else:
                 output = model(combined_input.to(device), current_forces.to(device))
@@ -130,9 +126,6 @@ def generate_model_filename(model_type, future_window, graph_type=None, **kwargs
     if kwargs['layer_constrain'] == True:
         base_name += f"_SAMELAYER:_{kwargs['layer_constrain']}"
 
-    if kwargs['multiply_exo_weights'] == True:
-        base_name += f"_multiply_exo_weights:_{kwargs['multiply_exo_weights']}"
-
     if 'n_pumps_connected' in kwargs:
         base_name += f"_N_PUMPS:_{kwargs['n_pumps_connected']}"
 
@@ -158,6 +151,10 @@ def generate_model_filename(model_type, future_window, graph_type=None, **kwargs
         wmin = kwargs.get('rf_weight_min', 0.08)
         wmax = kwargs.get('rf_weight_max', 0.2)
         base_name += f"_RFW:{wmin}-{wmax}"
+
+    if kwargs.get('multi_support'):
+        adap_gt = kwargs.get('adaptive_graph_type', 'rf')
+        base_name += f"_MS-{adap_gt}"
 
     return os.path.join(str(SAVED_MODELS_DIR), f"{base_name}.pt")
 

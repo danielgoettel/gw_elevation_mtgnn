@@ -15,8 +15,6 @@ import sys
 from data_preprocessing import process_data
 from data_preprocessing import gnn_data_prep
 from models.mtgnn import MTGNN
-from models.multigraph_gnn import MultigraphGNN
-
 from models.lstm_model import LSTMModel
 from data_preprocessing.dataset import AutoregressiveTimeSeriesDataset
 from utils.training_utils import prepare_combined_input, make_predictions, inverse_transform_with_shape_adjustment, generate_model_filename, save_rmse_values, record_result, analyze_results, get_synthetic
@@ -41,8 +39,6 @@ def create_model(num_features, num_nodes, seq_length, model_type, **kwargs):
     """Factory function to create the appropriate model based on model_type."""
     if model_type == 'MTGNN':
         return _create_mtgnn(num_features, num_nodes, seq_length, **kwargs)
-    elif model_type == 'MultigraphGNN':
-        return _create_multigraph_gnn(num_nodes, seq_length, **kwargs)
     elif model_type == 'LSTM':
         return _create_lstm_model()
     else:
@@ -56,7 +52,7 @@ def _create_mtgnn(num_features, num_nodes, seq_length, **kwargs):
         'dropout', 'subgraph_size', 'node_dim', 'dilation_exponential',
         'conv_channels', 'residual_channels', 'skip_channels', 'end_channels',
         'in_dim', 'out_dim', 'layers', 'propalpha', 'tanhalpha',
-        'layer_norm_affline', 'xd'
+        'layer_norm_affline', 'xd', 'multi_support'
     }}
     mtgnn_params['num_nodes'] = num_nodes
     mtgnn_params['seq_length'] = seq_length + 1
@@ -64,28 +60,6 @@ def _create_mtgnn(num_features, num_nodes, seq_length, **kwargs):
     mtgnn_params['out_dim'] = 1
     mtgnn_params['xd'] = num_features
     return MTGNN(**mtgnn_params)
-
-
-def _create_multigraph_gnn(num_nodes, seq_length, **kwargs):
-    """Create MultigraphGNN model."""
-    return MultigraphGNN(
-        num_nodes=num_nodes,
-        num_relations=kwargs.get('num_relations', 5),
-        seq_length=seq_length + 1,
-        in_dim=1,
-        out_dim=1,
-        residual_channels=kwargs.get('residual_channels', 64),
-        conv_channels=kwargs.get('conv_channels', 64),
-        skip_channels=kwargs.get('skip_channels', 64),
-        end_channels=kwargs.get('end_channels', 128),
-        layers=kwargs.get('layers', 4),
-        kernel_set=kwargs.get('kernel_set', [1, 2]),
-        kernel_size=kwargs.get('kernel_size', 2),
-        dilation_exponential=kwargs.get('dilation_exponential', 2),
-        dropout=kwargs.get('dropout', 0.5),
-        layer_norm_affline=kwargs.get('layer_norm_affline', True),
-        rgcn_num_bases=kwargs.get('rgcn_num_bases', None),
-    )
 
 
 def _create_lstm_model():
@@ -100,15 +74,13 @@ def _create_lstm_model():
 
 def model_forward(model, combined_input, model_type, config, device,
                    A_tilde=None, static_features=None,
-                   edge_index=None, edge_type=None, edge_weight=None,
                    current_forces=None):
     """Model-agnostic forward pass dispatcher."""
     if model_type == 'MTGNN':
-        if config['build_adj']:
+        if config.get('multi_support') or not config['build_adj']:
+            return model(combined_input, A_tilde.to(device), FE=static_features.to(device))
+        else:
             return model(combined_input, FE=static_features.to(device))
-        return model(combined_input, A_tilde.to(device), FE=static_features.to(device))
-    elif model_type == 'MultigraphGNN':
-        return model(combined_input, edge_index, edge_type, edge_weight)
     elif model_type == 'LSTM':
         return model(combined_input, current_forces)
     else:
@@ -117,7 +89,7 @@ def model_forward(model, combined_input, model_type, config, device,
 
 def compute_val_rmse_per_node(model, eval_loader, device, future_window, W,
                               model_type, config, A_tilde, static_features,
-                              num_piezo, edge_index, edge_type, edge_weight):
+                              num_piezo):
     """Compute per-node RMSE from validation batches (on scaled data)."""
     model.eval()
     node_squared_errors = np.zeros(num_piezo)
@@ -139,9 +111,8 @@ def compute_val_rmse_per_node(model, eval_loader, device, future_window, W,
                     output = model_forward(
                         model, combined_input, model_type, config, device,
                         A_tilde=A_tilde, static_features=static_features,
-                        edge_index=edge_index, edge_type=edge_type, edge_weight=edge_weight,
                         current_forces=current_forces)
-                    if model_type in ('MTGNN', 'MultigraphGNN'):
+                    if model_type == 'MTGNN':
                         output = output[:, :, :num_piezo, 0]
                     predictions.append(output)
                     current_input = torch.cat((current_input[:, 1:, :], output), dim=1)
@@ -160,7 +131,6 @@ def compute_val_rmse_per_node(model, eval_loader, device, future_window, W,
 def train(model, optimizer, loss_function, device, num_epochs, train_data, val_data,
           train_mask, val_mask, df_piezo_columns, num_piezo, static_features, A_tilde,
           F_w, W, config, model_type,
-          edge_index=None, edge_type=None, edge_weight=None,
           run_dir=None, eval_callback=None):
     
     # Early stopping parameters
@@ -273,10 +243,9 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
                           output = model_forward(
                               model, combined_input, model_type, config, device,
                               A_tilde=A_tilde, static_features=static_features,
-                              edge_index=edge_index, edge_type=edge_type, edge_weight=edge_weight,
                               current_forces=current_forces)
 
-                          if model_type in ('MTGNN', 'MultigraphGNN'):
+                          if model_type == 'MTGNN':
                               output = output[:, :, :num_piezo, 0]
                           predictions.append(output)
                           next_input = output
@@ -328,10 +297,9 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
                               output = model_forward(
                                   model, combined_input, model_type, config, device,
                                   A_tilde=A_tilde, static_features=static_features,
-                                  edge_index=edge_index, edge_type=edge_type, edge_weight=edge_weight,
                                   current_forces=current_forces)
 
-                              if model_type in ('MTGNN', 'MultigraphGNN'):
+                              if model_type == 'MTGNN':
                                   output = output[:, :, :num_piezo, 0]
                               predictions.append(output)
 
@@ -380,7 +348,7 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
                         per_node_rmse = compute_val_rmse_per_node(
                             model, dropout_eval_loader, device, dropout_eval_steps, W,
                             model_type, config, A_tilde, static_features,
-                            num_piezo, edge_index, edge_type, edge_weight)
+                            num_piezo)
 
                         # Only consider nodes that are still active
                         active_mask = np.ones(num_piezo, dtype=bool)
@@ -419,15 +387,6 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
                                 full_mask = torch.ones(A_tilde.shape[0], device=A_tilde.device)
                                 full_mask[:num_piezo] = node_mask.to(A_tilde.device)
                                 A_tilde = A_tilde * full_mask.unsqueeze(0) * full_mask.unsqueeze(1)
-
-                            # Edge masking — filter edges for MultigraphGNN
-                            if edge_index is not None:
-                                for idx in new_drops:
-                                    keep = ~((edge_index[0] == idx) | (edge_index[1] == idx))
-                                    edge_index = edge_index[:, keep]
-                                    edge_type = edge_type[keep]
-                                    if edge_weight is not None:
-                                        edge_weight = edge_weight[keep]
 
                             print(f"Node dropout at epoch {epoch + 1}: {len(new_drops)} new nodes dropped (threshold={threshold:.4f})")
                             print(f"  Newly dropped: {new_drop_names}")
@@ -564,8 +523,9 @@ def main(run_all=True):
                 'Weight Mode':              config['weight_mode'],
                 'RF Weight Range':          f"{config.get('rf_weight_min', '')}-{config.get('rf_weight_max', '')}" if config['weight_mode'] in ('variable', 'full') else "",
                 'VIM Min':                  config.get('rf_vim_min', '') if config['weight_mode'] == 'full' else "",
+                'Multi-Support':            config.get('multi_support', False),
+                'Adaptive Init':            config.get('adaptive_graph_type', '') if config.get('multi_support') else "",
                 'Same Layer':               config['layer_constrain'],
-                'Multiply_Exo_Weights':     config['multiply_exo_weights'],
                 "W":                        config['W'],
                 "F_w (trained)":            fw_step,
                 "F_w (config)":             config['F_w'],
@@ -619,8 +579,7 @@ def main(run_all=True):
 
 def evaluate_and_output(model, config, test_data, test_mask, df_piezo_columns, num_piezo,
                         scaler, A_tilde, static_features, W, device, run_dir, model_type,
-                        dropped_node_names, fw_step,
-                        edge_index=None, edge_type=None, edge_weight=None):
+                        dropped_node_names, fw_step):
     """Run 100-step autoregressive test evaluation and produce all outputs for a given F_w training step."""
 
     # Create F_w-specific output subdirectory
@@ -630,7 +589,7 @@ def evaluate_and_output(model, config, test_data, test_mask, df_piezo_columns, n
     test_sample = AutoregressiveTimeSeriesDataset(test_data, input_window=W, max_future_window=100, missing_data_mask=test_mask, num_piezo=num_piezo)[1]
     test_input, test_predicted_model, test_target = make_predictions(
         model, test_sample, device, 100, W, A_tilde, static_features, num_piezo,
-        modeltype=model_type, edge_index=edge_index, edge_type=edge_type, edge_weight=edge_weight)
+        modeltype=model_type)
 
     test_predicted_model_ = inverse_transform_with_shape_adjustment(test_predicted_model.numpy(), scaler, num_piezo)
     test_input_ = inverse_transform_with_shape_adjustment(test_input.numpy(), scaler, num_piezo)
@@ -672,8 +631,6 @@ def evaluate_and_output(model, config, test_data, test_mask, df_piezo_columns, n
         title_parts.append(f"exclude_evap_precip={config['exclude_evap_precip']}")
     if config.get('perturb_weights'):
         title_parts.append("perturb_weights")
-    if config.get('multiply_exo_weights'):
-        title_parts.append("multiply_exo_weights")
     if config.get('directed_graph'):
         title_parts.append("directed")
     if config.get('node_dropout'):
@@ -715,7 +672,7 @@ def run_training_and_evaluation(config):
         resampling_freq=config.get('resampling_freq', 'W')
     )
     train_data.to_csv(RANDOM_FOREST_TRAINING_DATA)
-    A_tilde, static_features, pyg_graph = gnn_data_prep.main(df_piezo_columns, pump_columns, locations_no_missing, config['graph_type'], config['percentage'] , config['n_piezo_connected'], config['feature_importance_multiplier'], config['n_pumps_connected'], config['weight_mode'], config['layer_constrain'], config['ext_data'], config['multiply_exo_weights'], directed_graph=config.get('directed_graph', False), mean_gw_elevation=mean_gw_elevation, rf_weight_min=config.get('rf_weight_min', 0.08), rf_weight_max=config.get('rf_weight_max', 0.2), rf_vim_min=config.get('rf_vim_min', 0.01))
+    A_tilde, static_features = gnn_data_prep.main(df_piezo_columns, pump_columns, locations_no_missing, config['graph_type'], config['percentage'] , config['n_piezo_connected'], config['feature_importance_multiplier'], config['n_pumps_connected'], config['weight_mode'], config['layer_constrain'], directed_graph=config.get('directed_graph', False), mean_gw_elevation=mean_gw_elevation, rf_weight_min=config.get('rf_weight_min', 0.08), rf_weight_max=config.get('rf_weight_max', 0.2), rf_vim_min=config.get('rf_vim_min', 0.01))
 
     heatmap_title = (f"{config.get('model_type', 'MTGNN')} | graph={config['graph_type']} | "
                      f"weight_mode={config['weight_mode']}<br>"
@@ -746,13 +703,26 @@ def run_training_and_evaluation(config):
         **config
     ).to(device)
 
-    # Prepare PyG graph tensors for GPU if needed
-    if model_type == 'MultigraphGNN':
-        edge_index = pyg_graph['edge_index'].to(device)
-        edge_type = pyg_graph['edge_type'].to(device)
-        edge_weight = pyg_graph['edge_weight'].to(device)
-    else:
-        edge_index = edge_type = edge_weight = None
+    # Multi-support: compute adaptive adjacency init and seed the model
+    if config.get('multi_support') and model_type == 'MTGNN':
+        adap_gt = config.get('adaptive_graph_type', 'rf')
+        adap_wm = config.get('adaptive_weight_mode', 'fixed')
+        print(f"Multi-support: computing adaptive init adjacency "
+              f"(graph_type={adap_gt}, weight_mode={adap_wm})")
+        adaptive_adj, _ = gnn_data_prep.main(
+            df_piezo_columns, pump_columns, locations_no_missing,
+            adap_gt, config['percentage'], config['n_piezo_connected'],
+            config['feature_importance_multiplier'], config['n_pumps_connected'],
+            adap_wm, config['layer_constrain'],
+            directed_graph=config.get('directed_graph', False),
+            mean_gw_elevation=mean_gw_elevation,
+            rf_weight_min=config.get('rf_weight_min', 0.08),
+            rf_weight_max=config.get('rf_weight_max', 0.2),
+            rf_vim_min=config.get('rf_vim_min', 0.01))
+        model.init_adaptive_adj(adaptive_adj)
+        print(f"Adaptive adjacency initialized from {adap_gt} "
+              f"(shape={adaptive_adj.shape}, "
+              f"nonzero={np.count_nonzero(adaptive_adj)})")
 
     for param in model.parameters():
         param.requires_grad = True
@@ -770,15 +740,13 @@ def run_training_and_evaluation(config):
           train_data=train_data, val_data=val_data, train_mask=train_mask, val_mask=val_mask,
           df_piezo_columns=df_piezo_columns, num_piezo=num_piezo, static_features=static_features,
           A_tilde=A_tilde, F_w=F_w, W=W, config=config, model_type=model_type,
-          edge_index=edge_index, edge_type=edge_type, edge_weight=edge_weight,
           run_dir=run_dir,
           eval_callback=lambda fw_step: step_results.append(
               (fw_step, *evaluate_and_output(
                   model, config, test_data, test_mask, df_piezo_columns, num_piezo,
                   scaler, A_tilde, static_features, W, device, run_dir, model_type,
                   [],
-                  fw_step,
-                  edge_index=edge_index, edge_type=edge_type, edge_weight=edge_weight))
+                  fw_step))
           ))
     if dropped_node_names is None:
         dropped_node_names = []
@@ -789,8 +757,7 @@ def run_training_and_evaluation(config):
         rmse_mean, rmse_std, geo_summary = evaluate_and_output(
             model, config, test_data, test_mask, df_piezo_columns, num_piezo,
             scaler, A_tilde, static_features, W, device, run_dir, model_type,
-            dropped_node_names, F_w,
-            edge_index=edge_index, edge_type=edge_type, edge_weight=edge_weight)
+            dropped_node_names, F_w)
         step_results.append((F_w, rmse_mean, rmse_std, geo_summary))
 
     return step_results, dropped_node_names
