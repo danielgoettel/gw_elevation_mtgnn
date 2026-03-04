@@ -152,6 +152,12 @@ def generate_model_filename(model_type, future_window, graph_type=None, **kwargs
         wmin = kwargs.get('rf_weight_min', 0.08)
         wmax = kwargs.get('rf_weight_max', 0.2)
         base_name += f"_RFW:{wmin}-{wmax}"
+    elif kwargs.get('weight_mode') == 'full':
+        vim = kwargs.get('rf_vim_min', 0.01)
+        base_name += f"_VIM:{vim}"
+        wmin = kwargs.get('rf_weight_min', 0.08)
+        wmax = kwargs.get('rf_weight_max', 0.2)
+        base_name += f"_RFW:{wmin}-{wmax}"
 
     return os.path.join(str(SAVED_MODELS_DIR), f"{base_name}.pt")
 

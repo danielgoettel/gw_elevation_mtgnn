@@ -562,7 +562,8 @@ def main(run_all=True):
                 "Pump Connections":         config["n_pumps_connected"],
                 'FIM':                      config["feature_importance_multiplier"],
                 'Weight Mode':              config['weight_mode'],
-                'RF Weight Range':          f"{config.get('rf_weight_min', '')}-{config.get('rf_weight_max', '')}" if config['weight_mode'] == 'variable' else "",
+                'RF Weight Range':          f"{config.get('rf_weight_min', '')}-{config.get('rf_weight_max', '')}" if config['weight_mode'] in ('variable', 'full') else "",
+                'VIM Min':                  config.get('rf_vim_min', '') if config['weight_mode'] == 'full' else "",
                 'Same Layer':               config['layer_constrain'],
                 'Multiply_Exo_Weights':     config['multiply_exo_weights'],
                 "W":                        config['W'],
@@ -714,7 +715,7 @@ def run_training_and_evaluation(config):
         resampling_freq=config.get('resampling_freq', 'W')
     )
     train_data.to_csv(RANDOM_FOREST_TRAINING_DATA)
-    A_tilde, static_features, pyg_graph = gnn_data_prep.main(df_piezo_columns, pump_columns, locations_no_missing, config['graph_type'], config['percentage'] , config['n_piezo_connected'], config['feature_importance_multiplier'], config['n_pumps_connected'], config['weight_mode'], config['layer_constrain'], config['ext_data'], config['multiply_exo_weights'], directed_graph=config.get('directed_graph', False), mean_gw_elevation=mean_gw_elevation, rf_weight_min=config.get('rf_weight_min', 0.08), rf_weight_max=config.get('rf_weight_max', 0.2))
+    A_tilde, static_features, pyg_graph = gnn_data_prep.main(df_piezo_columns, pump_columns, locations_no_missing, config['graph_type'], config['percentage'] , config['n_piezo_connected'], config['feature_importance_multiplier'], config['n_pumps_connected'], config['weight_mode'], config['layer_constrain'], config['ext_data'], config['multiply_exo_weights'], directed_graph=config.get('directed_graph', False), mean_gw_elevation=mean_gw_elevation, rf_weight_min=config.get('rf_weight_min', 0.08), rf_weight_max=config.get('rf_weight_max', 0.2), rf_vim_min=config.get('rf_vim_min', 0.01))
 
     heatmap_title = (f"{config.get('model_type', 'MTGNN')} | graph={config['graph_type']} | "
                      f"weight_mode={config['weight_mode']}<br>"

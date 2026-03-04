@@ -61,6 +61,9 @@ def define_base_configuration():
         'rf_weight_min': 0.08,
         'rf_weight_max': 0.2,
 
+        # RF full VIM mode — minimum importance threshold (weight_mode='full')
+        'rf_vim_min': 0.01,
+
         # Data resampling — 'W' for weekly, 'D' for daily, None for native 3-hourly
         'resampling_freq': 'W',
     }
