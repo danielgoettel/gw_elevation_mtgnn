@@ -152,6 +152,10 @@ def generate_model_filename(model_type, future_window, graph_type=None, **kwargs
         wmax = kwargs.get('rf_weight_max', 0.2)
         base_name += f"_RFW:{wmin}-{wmax}"
 
+    gcn_depth = kwargs.get('gcn_depth', 4)
+    if gcn_depth != 4:
+        base_name += f"_GCNd{gcn_depth}"
+
     if kwargs.get('multi_support'):
         adap_gt = kwargs.get('adaptive_graph_type', 'rf')
         base_name += f"_MS-{adap_gt}"

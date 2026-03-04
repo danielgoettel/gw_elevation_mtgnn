@@ -526,6 +526,7 @@ def main(run_all=True):
                 'Multi-Support':            config.get('multi_support', False),
                 'Adaptive Init':            config.get('adaptive_graph_type', '') if config.get('multi_support') else "",
                 'Same Layer':               config['layer_constrain'],
+                'GCN Depth':                config.get('gcn_depth', 4),
                 "W":                        config['W'],
                 "F_w (trained)":            fw_step,
                 "F_w (config)":             config['F_w'],

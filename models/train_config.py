@@ -72,9 +72,13 @@ def define_base_configuration():
 # When this list is non-empty, parameter_variations is ignored.
 # --------------------------------------------------------------------------
 explicit_configs = [
-    # ---- Daily runs: rf variable, geolayer ----
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'resampling_freq': 'D', 'F_w': 2, 'early_stopping_patience': 20, 'batch_size': 128},
-    {'graph_type': 'geolayer', 'resampling_freq': 'D', 'F_w': 2, 'early_stopping_patience': 20, 'batch_size': 128},
+    # ---- Weekly, gcn_depth=2: graph structure sensitivity test ----
+    {'graph_type': 'default', 'gcn_depth': 2, 'F_w': 4},
+    {'graph_type': 'geolayer', 'gcn_depth': 2, 'F_w': 4},
+    {'graph_type': 'rf', 'weight_mode': 'fixed', 'gcn_depth': 2, 'F_w': 4},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'gcn_depth': 2, 'F_w': 4},
+    {'graph_type': 'rf', 'weight_mode': 'fixed', 'layer_constrain': True, 'gcn_depth': 2, 'F_w': 4},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'gcn_depth': 2, 'F_w': 4},
 ]
 
 # Define variations for each parameter (Cartesian product — only used when explicit_configs is empty)
