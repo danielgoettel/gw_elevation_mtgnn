@@ -770,8 +770,12 @@ def run_training_and_evaluation(config):
     model_base = os.path.basename(
         generate_model_filename(future_window=F_w, **config)
     ).replace('.pt', '')
-    # Seeded runs go to a 'seed_experiment' subfolder
-    if config.get('seed') is not None:
+    # Route runs to appropriate subfolders
+    if config.get('multi_support'):
+        run_dir = OUTPUTS_DIR / "multi_support" / model_base
+    elif config.get('build_adj'):
+        run_dir = OUTPUTS_DIR / "adaptive" / model_base
+    elif config.get('seed') is not None:
         run_dir = OUTPUTS_DIR / "seed_experiment" / config['graph_type'] / model_base
     else:
         run_dir = OUTPUTS_DIR / config['graph_type'] / model_base
