@@ -73,34 +73,36 @@ def define_base_configuration():
 # --------------------------------------------------------------------------
 explicit_configs = [
     # ======================================================================
-    # Controlled experiment: 3 graph types x 8 seeds = 24 runs
-    # All other params locked to base config. F_w=3 (reuses existing fw1 models).
-    # Purpose: isolate graph-type effect with statistical replication.
+    # RF variant configs x 8 seeds = 24 runs
+    # All other params locked to base config. F_w=3.
     # ======================================================================
-    {'graph_type': 'default',  'seed': 42},
-    {'graph_type': 'default',  'seed': 123},
-    {'graph_type': 'default',  'seed': 256},
-    {'graph_type': 'default',  'seed': 512},
-    {'graph_type': 'default',  'seed': 777},
-    {'graph_type': 'default',  'seed': 1024},
-    {'graph_type': 'default',  'seed': 2048},
-    {'graph_type': 'default',  'seed': 3141},
-    {'graph_type': 'geolayer', 'seed': 42},
-    {'graph_type': 'geolayer', 'seed': 123},
-    {'graph_type': 'geolayer', 'seed': 256},
-    {'graph_type': 'geolayer', 'seed': 512},
-    {'graph_type': 'geolayer', 'seed': 777},
-    {'graph_type': 'geolayer', 'seed': 1024},
-    {'graph_type': 'geolayer', 'seed': 2048},
-    {'graph_type': 'geolayer', 'seed': 3141},
-    {'graph_type': 'rf',       'seed': 42},
-    {'graph_type': 'rf',       'seed': 123},
-    {'graph_type': 'rf',       'seed': 256},
-    {'graph_type': 'rf',       'seed': 512},
-    {'graph_type': 'rf',       'seed': 777},
-    {'graph_type': 'rf',       'seed': 1024},
-    {'graph_type': 'rf',       'seed': 2048},
-    {'graph_type': 'rf',       'seed': 3141},
+    # ---- RF variable weight x 8 seeds ----
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'seed': 42},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'seed': 123},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'seed': 256},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'seed': 512},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'seed': 777},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'seed': 1024},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'seed': 2048},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'seed': 3141},
+    # ---- RF fixed weight + geolayer separation x 8 seeds ----
+    {'graph_type': 'rf', 'layer_constrain': True, 'seed': 42},
+    {'graph_type': 'rf', 'layer_constrain': True, 'seed': 123},
+    {'graph_type': 'rf', 'layer_constrain': True, 'seed': 256},
+    {'graph_type': 'rf', 'layer_constrain': True, 'seed': 512},
+    {'graph_type': 'rf', 'layer_constrain': True, 'seed': 777},
+    {'graph_type': 'rf', 'layer_constrain': True, 'seed': 1024},
+    {'graph_type': 'rf', 'layer_constrain': True, 'seed': 2048},
+    {'graph_type': 'rf', 'layer_constrain': True, 'seed': 3141},
+    # ---- RF variable weight + geolayer separation x 8 seeds ----
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'seed': 42},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'seed': 123},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'seed': 256},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'seed': 512},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'seed': 777},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'seed': 1024},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'seed': 2048},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'seed': 3141},
 ]
 
 # Define variations for each parameter (Cartesian product — only used when explicit_configs is empty)
