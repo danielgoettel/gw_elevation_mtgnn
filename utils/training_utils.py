@@ -152,6 +152,9 @@ def generate_model_filename(model_type, future_window, graph_type=None, **kwargs
         wmax = kwargs.get('rf_weight_max', 0.2)
         base_name += f"_RFW:{wmin}-{wmax}"
 
+    if not kwargs.get('gcn_true', True):
+        base_name += "_noAdaptive"
+
     gcn_depth = kwargs.get('gcn_depth', 4)
     if gcn_depth != 4:
         base_name += f"_GCNd{gcn_depth}"
@@ -161,8 +164,12 @@ def generate_model_filename(model_type, future_window, graph_type=None, **kwargs
         base_name += f"_alpha{propalpha}"
 
     if kwargs.get('multi_support'):
-        adap_gt = kwargs.get('adaptive_graph_type', 'rf')
-        base_name += f"_MS-{adap_gt}"
+        if kwargs.get('build_adj'):
+            sg = kwargs.get('subgraph_size', 20)
+            base_name += f"_MS-GC_sg{sg}"
+        else:
+            adap_gt = kwargs.get('adaptive_graph_type', 'rf')
+            base_name += f"_MS-{adap_gt}"
 
     return os.path.join(str(SAVED_MODELS_DIR), f"{base_name}.pt")
 

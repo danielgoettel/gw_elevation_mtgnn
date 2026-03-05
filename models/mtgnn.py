@@ -694,12 +694,19 @@ class MTGNN(nn.Module):
             )
 
         if self._gcn_true:
-            if self._multi_support:
-                # Multi-support: static A_tilde + learnable adaptive adjacency
+            if self._multi_support and self._build_adj_true:
+                # Multi-support + GraphConstructor: static A_tilde + learned adjacency from FE
+                if idx is None:
+                    A_adaptive = self._graph_constructor(self._idx.to(X_in.device), FE=FE)
+                else:
+                    A_adaptive = self._graph_constructor(idx, FE=FE)
+                supports = [A_tilde, A_adaptive]
+            elif self._multi_support:
+                # Multi-support: static A_tilde + learnable adaptive adjacency (nn.Parameter)
                 A_adaptive = F.softmax(F.relu(self._adaptive_adj), dim=1)
                 supports = [A_tilde, A_adaptive]
             elif self._build_adj_true:
-                # Original MTGNN: only adaptive (GraphConstructor)
+                # Original MTGNN: only adaptive (GraphConstructor), replaces static
                 if idx is None:
                     A_tilde = self._graph_constructor(self._idx.to(X_in.device), FE=FE)
                 else:

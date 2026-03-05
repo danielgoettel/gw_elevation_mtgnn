@@ -526,6 +526,7 @@ def main(run_all=True):
                 'Multi-Support':            config.get('multi_support', False),
                 'Adaptive Init':            config.get('adaptive_graph_type', '') if config.get('multi_support') else "",
                 'Same Layer':               config['layer_constrain'],
+                'GCN True':                 config.get('gcn_true', True),
                 'GCN Depth':                config.get('gcn_depth', 4),
                 'PropAlpha':                config.get('propalpha', 0.07),
                 "W":                        config['W'],
@@ -550,6 +551,48 @@ def main(run_all=True):
 
             # Save results incrementally after each run (preserves existing formatting)
             os.makedirs(str(OUTPUTS_DIR), exist_ok=True)
+
+            # Multi-support runs go to a separate results table
+            if config.get('multi_support'):
+                ms_row = {
+                    "Timestamp":            datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+                    "Static Graph":         config["graph_type"],
+                    "Weight Mode":          config['weight_mode'],
+                    "Adaptive Type":        "GraphConstructor" if config.get('build_adj') else "nn.Parameter",
+                    "Subgraph Size":        config.get('subgraph_size', 20),
+                    "TanhAlpha":            config.get('tanhalpha', 0.2),
+                    "PropAlpha":            config.get('propalpha', 0.07),
+                    "GCN Depth":            config.get('gcn_depth', 4),
+                    "Piezo Connections":    config["n_piezo_connected"],
+                    "F_w":                  fw_step,
+                    "Overall RMSE Mean":    test_rmse_mean,
+                    "Overall RMSE StdDev":  test_rmse_std,
+                }
+                for _, grp in geolayer_summary.iterrows():
+                    layer = grp["geolayer"]
+                    ms_row[f"{layer} Mean"] = grp["RMSE Mean"]
+                    ms_row[f"{layer} StdDev"] = grp["RMSE StdDev"]
+
+                ms_path = OUTPUTS_DIR / "multi_support_results.xlsx"
+                df_ms = pd.DataFrame([ms_row])
+                if ms_path.exists():
+                    try:
+                        from openpyxl import load_workbook
+                        wb = load_workbook(str(ms_path))
+                        ws = wb.active
+                        for r in df_ms.itertuples(index=False):
+                            ws.append(list(r))
+                        wb.save(str(ms_path))
+                    except Exception as e:
+                        print(f"⚠ Could not append to {ms_path} ({e}). Backing up and creating new file.")
+                        backup = ms_path.with_suffix('.xlsx.bak')
+                        ms_path.rename(backup)
+                        df_ms.to_excel(ms_path, index=False)
+                else:
+                    df_ms.to_excel(ms_path, index=False)
+                print(f"→ Appended multi-support result to {ms_path}")
+                continue  # Skip overall_results for multi-support runs
+
             overall_path = OUTPUTS_DIR / "overall_results.xlsx"
             df_row = pd.DataFrame([row])
             if overall_path.exists():
