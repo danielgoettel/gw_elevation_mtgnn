@@ -511,7 +511,47 @@ def main(run_all=True):
         
         step_results, dropped_node_names = run_training_and_evaluation(config)
 
-        for fw_step, test_rmse_mean, test_rmse_std, geolayer_summary in step_results:
+        # Write best F_w step (lowest RMSE) to per-node results table
+        if step_results:
+            best_idx = min(range(len(step_results)), key=lambda k: step_results[k][1])
+            best_fw, best_rmse_mean, _, _, best_per_node, best_piezo_cols = step_results[best_idx]
+            node_row = {
+                "Timestamp":            datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+                "Graph Type":           config["graph_type"],
+                "Weight Mode":          config['weight_mode'],
+                "RF Weight Range":      f"{config.get('rf_weight_min', '')}-{config.get('rf_weight_max', '')}" if config['weight_mode'] in ('variable', 'full') else "",
+                "Multi-Support":        config.get('multi_support', False),
+                "Build Adj":            config.get('build_adj', False),
+                "Subgraph Size":        config.get('subgraph_size', 20),
+                "GCN True":             config.get('gcn_true', True),
+                "PropAlpha":            config.get('propalpha', 0.07),
+                "GCN Depth":            config.get('gcn_depth', 4),
+                "F_w":                  best_fw,
+                "Overall RMSE":         best_rmse_mean,
+            }
+            for col_name, rmse_val in zip(best_piezo_cols, best_per_node):
+                node_row[col_name] = rmse_val
+
+            node_path = OUTPUTS_DIR / "per_node_results.xlsx"
+            df_node = pd.DataFrame([node_row])
+            if node_path.exists():
+                try:
+                    from openpyxl import load_workbook
+                    wb = load_workbook(str(node_path))
+                    ws = wb.active
+                    for r in df_node.itertuples(index=False):
+                        ws.append(list(r))
+                    wb.save(str(node_path))
+                except Exception as e:
+                    print(f"⚠ Could not append to {node_path} ({e}). Backing up and creating new file.")
+                    backup = node_path.with_suffix('.xlsx.bak')
+                    node_path.rename(backup)
+                    df_node.to_excel(node_path, index=False)
+            else:
+                df_node.to_excel(node_path, index=False)
+            print(f"→ Appended per-node RMSE (best F_w={best_fw}) to {node_path}")
+
+        for fw_step, test_rmse_mean, test_rmse_std, geolayer_summary, _, _ in step_results:
             row = {
                 "Timestamp":                datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
                 "Model Type":               config["model_type"],
@@ -694,7 +734,7 @@ def evaluate_and_output(model, config, test_data, test_mask, df_piezo_columns, n
     print(f"\n📊 RMSE Summary by Geolayer (F_w={fw_step}):")
     print(geolayer_summary.to_string(index=False))
 
-    return test_rmse_mean, test_rmse_std, geolayer_summary
+    return test_rmse_mean, test_rmse_std, geolayer_summary, test_rmse, df_piezo_columns
 
 
 def run_training_and_evaluation(config):
@@ -799,11 +839,11 @@ def run_training_and_evaluation(config):
     # If train() didn't trigger callbacks (e.g. all steps loaded from cache),
     # evaluate once at the final F_w
     if not step_results:
-        rmse_mean, rmse_std, geo_summary = evaluate_and_output(
+        rmse_mean, rmse_std, geo_summary, per_node_rmse, piezo_cols = evaluate_and_output(
             model, config, test_data, test_mask, df_piezo_columns, num_piezo,
             scaler, A_tilde, static_features, W, device, run_dir, model_type,
             dropped_node_names, F_w)
-        step_results.append((F_w, rmse_mean, rmse_std, geo_summary))
+        step_results.append((F_w, rmse_mean, rmse_std, geo_summary, per_node_rmse, piezo_cols))
 
     return step_results, dropped_node_names
 
