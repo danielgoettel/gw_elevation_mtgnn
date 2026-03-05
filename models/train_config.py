@@ -35,7 +35,7 @@ def define_base_configuration():
         'learning_rate': 0.001,
         'num_epochs': 200,
         'batch_size': 32,
-        'F_w': 1,
+        'F_w': 3,
         'model_type': 'MTGNN',  # Options: 'MTGNN', 'LSTM'
         'early_stopping_patience': 30,
         'min_delta': 0.001,
@@ -74,7 +74,7 @@ def define_base_configuration():
 explicit_configs = [
     # ======================================================================
     # Controlled experiment: 3 graph types x 8 seeds = 24 runs
-    # All other params locked to base config. F_w=1 (single step).
+    # All other params locked to base config. F_w=3 (reuses existing fw1 models).
     # Purpose: isolate graph-type effect with statistical replication.
     # ======================================================================
     {'graph_type': 'default',  'seed': 42},
