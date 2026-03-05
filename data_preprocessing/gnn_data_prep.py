@@ -824,7 +824,68 @@ def load_and_concatenate_metadata(piezo_metadata_path, pump_metadata_path, evap_
     )
 
 
-def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, percentage=None, n_piezo_connected=3, feature_importance_multiplier = None, n_pumps_connected = 4, weight_mode = 'fixed', same_layer = False, directed_graph=False, mean_gw_elevation=None, rf_weight_min=0.08, rf_weight_max=0.2, rf_vim_min=0.01):
+def generate_mixed_optimal_adjacency(rmse_table_path, variant_adj_matrices, num_piezo,
+                                     fallback_variant='default'):
+    """Build a mixed adjacency matrix by selecting each piezometer node's row
+    from whichever graph variant produced the lowest seed-averaged RMSE.
+
+    Parameters
+    ----------
+    rmse_table_path : str or Path
+        Path to the Excel file with per-node RMSE values.
+        Expected sheet: "Per-Node RMSE Comparison", header at row 3.
+        Columns: Variant, Seed, F_w, Overall RMSE, then one column per node.
+    variant_adj_matrices : dict[str, np.ndarray]
+        Mapping from variant name (as it appears in the RMSE table) to its
+        adjacency matrix (numpy array).
+    num_piezo : int
+        Number of piezometer nodes (first num_piezo rows/cols in adj matrix).
+    fallback_variant : str
+        Variant to use for exogenous node rows and any node not found in table.
+
+    Returns
+    -------
+    mixed_adj : np.ndarray
+        Symmetric mixed adjacency matrix.
+    best_variant_per_node : dict
+        Mapping from node name to its best variant.
+    """
+    # Read RMSE table
+    df = pd.read_excel(rmse_table_path, sheet_name="Per-Node RMSE Comparison",
+                       header=2)
+
+    # Node columns are everything after the first 4 metadata columns
+    node_cols = df.columns[4:].tolist()
+
+    # Compute mean RMSE per variant per node (averaging across seeds)
+    variant_means = df.groupby(df.columns[0])[node_cols].mean()
+
+    # For each node, find the variant with the lowest mean RMSE
+    best_variant_per_node = variant_means.idxmin(axis=0).to_dict()
+
+    num_total = variant_adj_matrices[fallback_variant].shape[0]
+
+    # Build mixed adjacency
+    mixed_adj = np.zeros((num_total, num_total), dtype=float)
+
+    # Map node names to indices (first num_piezo nodes are piezometers)
+    for i, node_name in enumerate(node_cols[:num_piezo]):
+        best_v = best_variant_per_node.get(node_name, fallback_variant)
+        if best_v in variant_adj_matrices:
+            mixed_adj[i, :] = variant_adj_matrices[best_v][i, :]
+        else:
+            mixed_adj[i, :] = variant_adj_matrices[fallback_variant][i, :]
+
+    # Exogenous rows from fallback variant
+    mixed_adj[num_piezo:, :] = variant_adj_matrices[fallback_variant][num_piezo:, :]
+
+    # Symmetrize
+    mixed_adj = np.maximum(mixed_adj, mixed_adj.T)
+
+    return mixed_adj, best_variant_per_node
+
+
+def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, percentage=None, n_piezo_connected=3, feature_importance_multiplier = None, n_pumps_connected = 4, weight_mode = 'fixed', same_layer = False, directed_graph=False, mean_gw_elevation=None, rf_weight_min=0.08, rf_weight_max=0.2, rf_vim_min=0.01, rmse_table_path=None, variant_graph_paths=None):
     # Paths to the metadata files (update these paths according to your folder structure)
 
     metadata_path = PIEZO_METADATA
@@ -909,6 +970,19 @@ def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, perce
                   feature_importance_multiplier=feature_importance_multiplier,
                   rf_weight_min=rf_weight_min, rf_weight_max=rf_weight_max)
           np.save(GENERATED_GRAPHS / f"{graph_tag}.npy", adj_matrix)
+
+    elif graph_type == 'mixed':
+        if rmse_table_path is None or variant_graph_paths is None:
+            raise ValueError("graph_type='mixed' requires rmse_table_path and variant_graph_paths (dict of variant→np.ndarray)")
+        adj_matrix, best_variants = generate_mixed_optimal_adjacency(
+            rmse_table_path, variant_graph_paths, num_piezo)
+        np.save(GENERATED_GRAPHS / f"{graph_tag}.npy", adj_matrix)
+        # Log variant selection summary
+        from collections import Counter
+        counts = Counter(best_variants.values())
+        print(f"Mixed graph: selected best variant per node from {len(variant_graph_paths)} variants")
+        for v, c in counts.most_common():
+            print(f"  {v}: {c} nodes")
 
     else:
         raise ValueError(f"Unknown graph_type: {graph_type}")

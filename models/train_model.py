@@ -788,7 +788,45 @@ def run_training_and_evaluation(config):
         resampling_freq=config.get('resampling_freq', 'W')
     )
     train_data.to_csv(RANDOM_FOREST_TRAINING_DATA)
-    A_tilde, static_features = gnn_data_prep.main(df_piezo_columns, pump_columns, locations_no_missing, config['graph_type'], config['percentage'] , config['n_piezo_connected'], config['feature_importance_multiplier'], config['n_pumps_connected'], config['weight_mode'], config['layer_constrain'], directed_graph=config.get('directed_graph', False), mean_gw_elevation=mean_gw_elevation, rf_weight_min=config.get('rf_weight_min', 0.08), rf_weight_max=config.get('rf_weight_max', 0.2), rf_vim_min=config.get('rf_vim_min', 0.01))
+
+    if config['graph_type'] == 'mixed':
+        # Build all 6 variant adjacency matrices, then let mixed selector pick per-node best
+        variant_specs = [
+            ('default',                      'fixed',    False),
+            ('geolayer',                     'fixed',    False),
+            ('rf',                           'fixed',    False),
+            ('rf + variable',                'variable', False),
+            ('rf + geolayer-sep',            'fixed',    True),
+            ('rf + variable + geolayer-sep', 'variable', True),
+        ]
+        # Map RMSE-table variant names → gnn_data_prep graph_type params
+        variant_adj = {}
+        for variant_label, wm, lc in variant_specs:
+            gt = 'geolayer' if variant_label == 'geolayer' else ('default' if variant_label == 'default' else 'rf')
+            adj_t, sf = gnn_data_prep.main(
+                df_piezo_columns, pump_columns, locations_no_missing, gt,
+                config['percentage'], config['n_piezo_connected'],
+                config['feature_importance_multiplier'], config['n_pumps_connected'],
+                wm, lc, directed_graph=False, mean_gw_elevation=mean_gw_elevation,
+                rf_weight_min=config.get('rf_weight_min', 0.08),
+                rf_weight_max=config.get('rf_weight_max', 0.2),
+                rf_vim_min=config.get('rf_vim_min', 0.01))
+            variant_adj[variant_label] = adj_t.numpy() if hasattr(adj_t, 'numpy') else np.array(adj_t)
+            print(f"  Built adjacency for variant '{variant_label}'")
+        static_features = sf  # all variants produce the same static features
+
+        rmse_table_path = config.get('rmse_table_path') or str(OUTPUTS_DIR / "per_node_rmse_all_variants.xlsx")
+        A_tilde, static_features = gnn_data_prep.main(
+            df_piezo_columns, pump_columns, locations_no_missing, 'mixed',
+            config['percentage'], config['n_piezo_connected'],
+            config['feature_importance_multiplier'], config['n_pumps_connected'],
+            config['weight_mode'], config['layer_constrain'],
+            directed_graph=config.get('directed_graph', False),
+            mean_gw_elevation=mean_gw_elevation,
+            rmse_table_path=rmse_table_path,
+            variant_graph_paths=variant_adj)
+    else:
+        A_tilde, static_features = gnn_data_prep.main(df_piezo_columns, pump_columns, locations_no_missing, config['graph_type'], config['percentage'] , config['n_piezo_connected'], config['feature_importance_multiplier'], config['n_pumps_connected'], config['weight_mode'], config['layer_constrain'], directed_graph=config.get('directed_graph', False), mean_gw_elevation=mean_gw_elevation, rf_weight_min=config.get('rf_weight_min', 0.08), rf_weight_max=config.get('rf_weight_max', 0.2), rf_vim_min=config.get('rf_vim_min', 0.01))
 
     heatmap_title = (f"{config.get('model_type', 'MTGNN')} | graph={config['graph_type']} | "
                      f"weight_mode={config['weight_mode']}<br>"

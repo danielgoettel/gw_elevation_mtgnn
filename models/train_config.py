@@ -65,6 +65,10 @@ def define_base_configuration():
         'multi_support': False,
         'adaptive_graph_type': 'rf',       # Source for adaptive init: 'rf', 'geolayer', 'default'
         'adaptive_weight_mode': 'fixed',   # Weight mode for adaptive init (when adaptive_graph_type='rf')
+
+        # Mixed-optimal graph — path to the RMSE table used to select best variant per node
+        # Set to None to use default: OUTPUTS_DIR / "per_node_rmse_all_variants.xlsx"
+        'rmse_table_path': None,
     }
 
 # --------------------------------------------------------------------------
@@ -72,52 +76,15 @@ def define_base_configuration():
 # When this list is non-empty, parameter_variations is ignored.
 # --------------------------------------------------------------------------
 explicit_configs = [
-    # ======================================================================
-    # RF variant configs x 8 seeds = 24 runs
-    # All other params locked to base config. F_w=3.
-    # ======================================================================
-    # ---- RF variable weight x 8 seeds ----
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'seed': 42},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'seed': 123},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'seed': 256},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'seed': 512},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'seed': 777},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'seed': 1024},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'seed': 2048},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'seed': 3141},
-    # ---- RF fixed weight + geolayer separation x 8 seeds ----
-    {'graph_type': 'rf', 'layer_constrain': True, 'seed': 42},
-    {'graph_type': 'rf', 'layer_constrain': True, 'seed': 123},
-    {'graph_type': 'rf', 'layer_constrain': True, 'seed': 256},
-    {'graph_type': 'rf', 'layer_constrain': True, 'seed': 512},
-    {'graph_type': 'rf', 'layer_constrain': True, 'seed': 777},
-    {'graph_type': 'rf', 'layer_constrain': True, 'seed': 1024},
-    {'graph_type': 'rf', 'layer_constrain': True, 'seed': 2048},
-    {'graph_type': 'rf', 'layer_constrain': True, 'seed': 3141},
-    # ---- RF variable weight + geolayer separation x 8 seeds ----
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'seed': 42},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'seed': 123},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'seed': 256},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'seed': 512},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'seed': 777},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'seed': 1024},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'seed': 2048},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'seed': 3141},
-    # ======================================================================
-    # Multi-support (static + adaptive adjacency): 9 combos x 8 seeds = 72 runs
-    # ======================================================================
-] + [
-    {'graph_type': gt, 'multi_support': True, 'adaptive_graph_type': agt, 'seed': s}
-    for gt in ['default', 'geolayer', 'rf']
-    for agt in ['default', 'geolayer', 'rf']
-    for s in [42, 123, 256, 512, 777, 1024, 2048, 3141]
-] + [
-    # ======================================================================
-    # Purely adaptive (build_adj=True, no static adjacency): 3 sizes x 8 seeds = 24 runs
-    # ======================================================================
-    {'build_adj': True, 'subgraph_size': sg, 'seed': s}
-    for sg in [5, 10, 20]
-    for s in [42, 123, 256, 512, 777, 1024, 2048, 3141]
+    # ---- Mixed-optimal graph x 8 seeds ----
+    {'graph_type': 'mixed', 'seed': 42},
+    {'graph_type': 'mixed', 'seed': 123},
+    {'graph_type': 'mixed', 'seed': 256},
+    {'graph_type': 'mixed', 'seed': 512},
+    {'graph_type': 'mixed', 'seed': 777},
+    {'graph_type': 'mixed', 'seed': 1024},
+    {'graph_type': 'mixed', 'seed': 2048},
+    {'graph_type': 'mixed', 'seed': 3141},
 ]
 
 # Define variations for each parameter (Cartesian product — only used when explicit_configs is empty)
