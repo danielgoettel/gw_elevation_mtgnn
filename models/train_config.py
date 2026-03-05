@@ -76,14 +76,21 @@ explicit_configs = [
     {'graph_type': 'default', 'multi_support': True, 'build_adj': True, 'subgraph_size': 5, 'F_w': 3},
     {'graph_type': 'geolayer', 'multi_support': True, 'build_adj': True, 'subgraph_size': 5, 'F_w': 3},
     {'graph_type': 'rf', 'weight_mode': 'fixed', 'multi_support': True, 'build_adj': True, 'subgraph_size': 5, 'F_w': 3},
-    # ---- multi_support + build_adj: static + GraphConstructor, subgraph_size=10 ----
-    {'graph_type': 'default', 'multi_support': True, 'build_adj': True, 'subgraph_size': 10, 'F_w': 3},
-    {'graph_type': 'geolayer', 'multi_support': True, 'build_adj': True, 'subgraph_size': 10, 'F_w': 3},
-    {'graph_type': 'rf', 'weight_mode': 'fixed', 'multi_support': True, 'build_adj': True, 'subgraph_size': 10, 'F_w': 3},
-    # ---- multi_support + build_adj: static + GraphConstructor, subgraph_size=20 ----
-    {'graph_type': 'default', 'multi_support': True, 'build_adj': True, 'subgraph_size': 20, 'F_w': 3},
-    {'graph_type': 'geolayer', 'multi_support': True, 'build_adj': True, 'subgraph_size': 20, 'F_w': 3},
-    {'graph_type': 'rf', 'weight_mode': 'fixed', 'multi_support': True, 'build_adj': True, 'subgraph_size': 20, 'F_w': 3},
+    # ---- multi_support + build_adj: static + GraphConstructor, subgraph_size=3 ----
+    {'graph_type': 'default', 'multi_support': True, 'build_adj': True, 'subgraph_size': 3, 'F_w': 3},
+    {'graph_type': 'geolayer', 'multi_support': True, 'build_adj': True, 'subgraph_size': 3, 'F_w': 3},
+    {'graph_type': 'rf', 'weight_mode': 'fixed', 'multi_support': True, 'build_adj': True, 'subgraph_size': 3, 'F_w': 3},
+    # ---- multi_support + build_adj: static + GraphConstructor, subgraph_size=4 ----
+    {'graph_type': 'default', 'multi_support': True, 'build_adj': True, 'subgraph_size': 4, 'F_w': 3},
+    {'graph_type': 'geolayer', 'multi_support': True, 'build_adj': True, 'subgraph_size': 4, 'F_w': 3},
+    {'graph_type': 'rf', 'weight_mode': 'fixed', 'multi_support': True, 'build_adj': True, 'subgraph_size': 4, 'F_w': 3},
+    # ---- RF variable weight ranges, multi_support + build_adj ----
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.05, 'rf_weight_max': 0.4, 'multi_support': True, 'build_adj': True, 'subgraph_size': 3, 'F_w': 3},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'multi_support': True, 'build_adj': True, 'subgraph_size': 3, 'F_w': 3},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.05, 'rf_weight_max': 0.4, 'multi_support': True, 'build_adj': True, 'subgraph_size': 4, 'F_w': 3},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'multi_support': True, 'build_adj': True, 'subgraph_size': 4, 'F_w': 3},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.05, 'rf_weight_max': 0.4, 'multi_support': True, 'build_adj': True, 'subgraph_size': 5, 'F_w': 3},
+    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'multi_support': True, 'build_adj': True, 'subgraph_size': 5, 'F_w': 3},
 ]
 
 # Define variations for each parameter (Cartesian product — only used when explicit_configs is empty)
