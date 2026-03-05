@@ -171,6 +171,10 @@ def generate_model_filename(model_type, future_window, graph_type=None, **kwargs
             adap_gt = kwargs.get('adaptive_graph_type', 'rf')
             base_name += f"_MS-{adap_gt}"
 
+    seed = kwargs.get('seed', None)
+    if seed is not None:
+        base_name += f"_s{seed}"
+
     return os.path.join(str(SAVED_MODELS_DIR), f"{base_name}.pt")
 
 

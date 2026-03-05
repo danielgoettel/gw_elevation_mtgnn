@@ -28,6 +28,7 @@ from train_config import define_base_configuration, parameter_variations, explic
 
 import time
 import datetime
+import random
 
 
 
@@ -526,13 +527,19 @@ def main(run_all=True):
                 "GCN True":             config.get('gcn_true', True),
                 "PropAlpha":            config.get('propalpha', 0.07),
                 "GCN Depth":            config.get('gcn_depth', 4),
+                "Seed":                 config.get('seed', ''),
                 "F_w":                  best_fw,
                 "Overall RMSE":         best_rmse_mean,
             }
             for col_name, rmse_val in zip(best_piezo_cols, best_per_node):
                 node_row[col_name] = rmse_val
 
-            node_path = OUTPUTS_DIR / "per_node_results.xlsx"
+            if config.get('seed') is not None:
+                seed_out = OUTPUTS_DIR / "seed_experiment"
+                os.makedirs(str(seed_out), exist_ok=True)
+                node_path = seed_out / "per_node_results.xlsx"
+            else:
+                node_path = OUTPUTS_DIR / "per_node_results.xlsx"
             df_node = pd.DataFrame([node_row])
             if node_path.exists():
                 try:
@@ -575,6 +582,7 @@ def main(run_all=True):
                 "Node Dropout":             config.get('node_dropout', False),
                 "Dropped Nodes":            ", ".join(dropped_node_names) if dropped_node_names else "",
                 "Directed Graph":           config.get('directed_graph', False),
+                "Seed":                     config.get('seed', ''),
                 "Overall RMSE Mean":        test_rmse_mean,
                 "Overall RMSE StdDev":      test_rmse_std,
             }
@@ -633,7 +641,12 @@ def main(run_all=True):
                 print(f"→ Appended multi-support result to {ms_path}")
                 continue  # Skip overall_results for multi-support runs
 
-            overall_path = OUTPUTS_DIR / "overall_results.xlsx"
+            if config.get('seed') is not None:
+                seed_out = OUTPUTS_DIR / "seed_experiment"
+                os.makedirs(str(seed_out), exist_ok=True)
+                overall_path = seed_out / "seed_experiment_results.xlsx"
+            else:
+                overall_path = OUTPUTS_DIR / "overall_results.xlsx"
             df_row = pd.DataFrame([row])
             if overall_path.exists():
                 try:
@@ -739,6 +752,16 @@ def evaluate_and_output(model, config, test_data, test_mask, df_piezo_columns, n
 
 def run_training_and_evaluation(config):
 
+    # Seed reproducibility
+    seed = config.get('seed', None)
+    if seed is not None:
+        random.seed(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
+        print(f"Random seed set to {seed}")
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using {device} device.")
 
@@ -747,7 +770,11 @@ def run_training_and_evaluation(config):
     model_base = os.path.basename(
         generate_model_filename(future_window=F_w, **config)
     ).replace('.pt', '')
-    run_dir = OUTPUTS_DIR / config['graph_type'] / model_base
+    # Seeded runs go to a 'seed_experiment' subfolder
+    if config.get('seed') is not None:
+        run_dir = OUTPUTS_DIR / "seed_experiment" / config['graph_type'] / model_base
+    else:
+        run_dir = OUTPUTS_DIR / config['graph_type'] / model_base
     os.makedirs(str(run_dir), exist_ok=True)
     print(f"Run output directory: {run_dir}")
 

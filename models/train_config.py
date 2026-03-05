@@ -72,25 +72,35 @@ def define_base_configuration():
 # When this list is non-empty, parameter_variations is ignored.
 # --------------------------------------------------------------------------
 explicit_configs = [
-    # ---- multi_support + build_adj: static + GraphConstructor, subgraph_size=5 ----
-    {'graph_type': 'default', 'multi_support': True, 'build_adj': True, 'subgraph_size': 5, 'F_w': 3},
-    {'graph_type': 'geolayer', 'multi_support': True, 'build_adj': True, 'subgraph_size': 5, 'F_w': 3},
-    {'graph_type': 'rf', 'weight_mode': 'fixed', 'multi_support': True, 'build_adj': True, 'subgraph_size': 5, 'F_w': 3},
-    # ---- multi_support + build_adj: static + GraphConstructor, subgraph_size=3 ----
-    {'graph_type': 'default', 'multi_support': True, 'build_adj': True, 'subgraph_size': 3, 'F_w': 3},
-    {'graph_type': 'geolayer', 'multi_support': True, 'build_adj': True, 'subgraph_size': 3, 'F_w': 3},
-    {'graph_type': 'rf', 'weight_mode': 'fixed', 'multi_support': True, 'build_adj': True, 'subgraph_size': 3, 'F_w': 3},
-    # ---- multi_support + build_adj: static + GraphConstructor, subgraph_size=4 ----
-    {'graph_type': 'default', 'multi_support': True, 'build_adj': True, 'subgraph_size': 4, 'F_w': 3},
-    {'graph_type': 'geolayer', 'multi_support': True, 'build_adj': True, 'subgraph_size': 4, 'F_w': 3},
-    {'graph_type': 'rf', 'weight_mode': 'fixed', 'multi_support': True, 'build_adj': True, 'subgraph_size': 4, 'F_w': 3},
-    # ---- RF variable weight ranges, multi_support + build_adj ----
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.05, 'rf_weight_max': 0.4, 'multi_support': True, 'build_adj': True, 'subgraph_size': 3, 'F_w': 3},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'multi_support': True, 'build_adj': True, 'subgraph_size': 3, 'F_w': 3},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.05, 'rf_weight_max': 0.4, 'multi_support': True, 'build_adj': True, 'subgraph_size': 4, 'F_w': 3},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'multi_support': True, 'build_adj': True, 'subgraph_size': 4, 'F_w': 3},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.05, 'rf_weight_max': 0.4, 'multi_support': True, 'build_adj': True, 'subgraph_size': 5, 'F_w': 3},
-    {'graph_type': 'rf', 'weight_mode': 'variable', 'rf_weight_min': 0.08, 'rf_weight_max': 0.2, 'multi_support': True, 'build_adj': True, 'subgraph_size': 5, 'F_w': 3},
+    # ======================================================================
+    # Controlled experiment: 3 graph types x 8 seeds = 24 runs
+    # All other params locked to base config. F_w=1 (single step).
+    # Purpose: isolate graph-type effect with statistical replication.
+    # ======================================================================
+    {'graph_type': 'default',  'seed': 42},
+    {'graph_type': 'default',  'seed': 123},
+    {'graph_type': 'default',  'seed': 256},
+    {'graph_type': 'default',  'seed': 512},
+    {'graph_type': 'default',  'seed': 777},
+    {'graph_type': 'default',  'seed': 1024},
+    {'graph_type': 'default',  'seed': 2048},
+    {'graph_type': 'default',  'seed': 3141},
+    {'graph_type': 'geolayer', 'seed': 42},
+    {'graph_type': 'geolayer', 'seed': 123},
+    {'graph_type': 'geolayer', 'seed': 256},
+    {'graph_type': 'geolayer', 'seed': 512},
+    {'graph_type': 'geolayer', 'seed': 777},
+    {'graph_type': 'geolayer', 'seed': 1024},
+    {'graph_type': 'geolayer', 'seed': 2048},
+    {'graph_type': 'geolayer', 'seed': 3141},
+    {'graph_type': 'rf',       'seed': 42},
+    {'graph_type': 'rf',       'seed': 123},
+    {'graph_type': 'rf',       'seed': 256},
+    {'graph_type': 'rf',       'seed': 512},
+    {'graph_type': 'rf',       'seed': 777},
+    {'graph_type': 'rf',       'seed': 1024},
+    {'graph_type': 'rf',       'seed': 2048},
+    {'graph_type': 'rf',       'seed': 3141},
 ]
 
 # Define variations for each parameter (Cartesian product — only used when explicit_configs is empty)
