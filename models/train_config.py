@@ -79,11 +79,17 @@ _DROP_NODE = ['B39F0739-003']
 _SEEDS = [42, 123, 256, 512, 777, 1024, 2048, 3141]
 
 explicit_configs = [
-    # ---- Drop high-RMSE node: default, geolayer, rf x 8 seeds ----
-    *[{'graph_type': gt, 'seed': s, 'exclude_nodes': _DROP_NODE}
-      for gt in ('default', 'geolayer', 'rf')
-      for s in _SEEDS],
+    {'graph_type': 'hydraulic_dijkstra', 'seed': 42},
+    {'graph_type': 'hydraulic_straight', 'seed': 42},
 ]
+
+# Previous config (kept for reference):
+# explicit_configs = [
+#     # ---- Drop high-RMSE node: default, geolayer, rf x 8 seeds ----
+#     *[{'graph_type': gt, 'seed': s, 'exclude_nodes': _DROP_NODE}
+#       for gt in ('default', 'geolayer', 'rf')
+#       for s in _SEEDS],
+# ]
 
 # Previous config (kept for reference):
 # explicit_configs = [

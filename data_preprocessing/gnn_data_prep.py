@@ -18,7 +18,8 @@ from datetime import datetime
 from config import (
     PIEZO_METADATA, PUMP_METADATA, PUMP_DISTANCES, EVAP_METADATA,
     PREC_METADATA, RIVER_METADATA, PREPROCESSED_DIR, RANDOM_FOREST_TRAINING_DATA, GENERATED_GRAPHS,
-    RF_TRAINED_ALL, RF_TRAINED_PIEZOS_ONLY, PIEZO_LAYER_INFORMATION
+    RF_TRAINED_ALL, RF_TRAINED_PIEZOS_ONLY, PIEZO_LAYER_INFORMATION,
+    HYDRAULIC_RESISTANCE_DIR
 )
 
 def euclidean_distance(x1, y1, x2, y2):
@@ -384,15 +385,22 @@ def generate_layer_constrained_adjacency_matrix(
 
     return adj_matrix
 """
+Latent feature distance based graph is based on Liu et al 2025.  The graph uses euclidian distance as well as hydraulic conductivity to create a feature-based distance calculation based on the equation:
+dist(Vi​,Vj​)= ΔX2 + ΔY2 + ΔZ + ΔKx2 ​+ ΔKy2 ​+ ΔKz2 ​+ Δh2​
 
-def generate_layer_constrained_adjacency_matrix(
+Where x,y,z are the coordinates of the screen midpoint, Kx, Ky, and Kz are the change in k in x, y, and z, and h is average head over the available date set for each well.
+
+#TODO Import pump distances, regis layer names, and historic hydraulic head data.
+#TODO For each location calculate the average head in the data set.
+#TODO For 
+
+"""
+def generate_latent_feature_distance_graph(
         all_coords, piezo_names, num_piezo, num_pump, num_prec, num_evap, num_river,
-        layer_column="geolayer", percentage=None, n_piezo_connected=3, n_pumps_connected=4
+        layer_column="regis_layer", percentage=None, n_piezo_connected=3, n_pumps_connected=4
 ):
-    
-    Create adjacency matrix by connecting piezometers only if they are in the same layer
-    (either 'geolayer' or 'regis_layer').
 
+"""
     Parameters
     ----------
     all_coords : ndarray
@@ -824,6 +832,91 @@ def load_and_concatenate_metadata(piezo_metadata_path, pump_metadata_path, evap_
     )
 
 
+def generate_hydraulic_adjacency_matrix(
+    all_coords, piezo_names, num_piezo, num_pump, num_prec, num_evap, num_river,
+    n_piezo_connected=3, n_pumps_connected=4, resistance_mode='dijkstra',
+    weight_min=0.08, weight_max=0.2
+):
+    """
+    Build adjacency matrix using pre-computed hydraulic resistance from GeoTOP.
+
+    The piezo-piezo block uses the resistance matrix computed in the
+    hydraulic_connectivity_graph notebook.  Each piezometer connects to its
+    top-N lowest-resistance (= highest connectivity) neighbors, with edge
+    weights scaled to [weight_min, weight_max].  Exogenous connections
+    (pumps, precip, evap, rivers) follow the same distance-based rules as
+    the default graph.
+
+    Parameters
+    ----------
+    resistance_mode : str
+        'dijkstra' or 'straight' — selects which resistance .npy file to load.
+    """
+    # ── Load pre-computed resistance matrix (piezo-only, ordered by metadata CSV) ──
+    res_file = HYDRAULIC_RESISTANCE_DIR / f'resistance_{resistance_mode}.npy'
+    res_full = np.load(res_file)
+
+    # The notebook built the resistance matrix using piezometer_metadata.csv order.
+    # Re-order rows/cols to match piezo_names (= df_piezo_columns order).
+    meta = pd.read_csv(PIEZO_METADATA)
+    notebook_order = meta['name'].tolist()
+
+    # Build index mapping: notebook_order position → piezo_names position
+    nb_name_to_idx = {n: i for i, n in enumerate(notebook_order)}
+    reorder = [nb_name_to_idx[n] for n in piezo_names]
+    res = res_full[np.ix_(reorder, reorder)]
+
+    # ── Convert resistance → top-N adjacency ──
+    connectivity = np.where(res > 0, 1.0 / res, 0.0)
+    np.fill_diagonal(connectivity, 0)
+
+    piezo_block = np.zeros((num_piezo, num_piezo))
+    for i in range(num_piezo):
+        row = connectivity[i]
+        top_idx = np.argsort(row)[-n_piezo_connected:]
+        top_idx = top_idx[row[top_idx] > 0]  # exclude zeros
+        piezo_block[i, top_idx] = row[top_idx]
+
+    # Symmetrize
+    piezo_block = np.maximum(piezo_block, piezo_block.T)
+
+    # Scale non-zero weights to [weight_min, weight_max]
+    pos = piezo_block > 0
+    if pos.any():
+        vals = piezo_block[pos]
+        scaled = weight_min + (vals - vals.min()) / (vals.max() - vals.min() + 1e-10) * (weight_max - weight_min)
+        piezo_block[pos] = scaled
+
+    # ── Build full adjacency with exogenous connections ──
+    num_nodes = len(all_coords)
+    adj_matrix = np.zeros((num_nodes, num_nodes))
+    adj_matrix[:num_piezo, :num_piezo] = piezo_block
+
+    dist_matrix = pairwise_distances(all_coords)
+    closest_pumps = get_n_closest_pumps_indices(n_pumps_connected, num_piezo)
+
+    for i in range(num_piezo):
+        # Pumps
+        adj_matrix[i, closest_pumps[i]] = 0.2
+
+        # Closest precipitation
+        prec_idx = num_piezo + num_pump + np.argmin(
+            dist_matrix[i, num_piezo + num_pump:num_piezo + num_pump + num_prec])
+        adj_matrix[i, prec_idx] = 0.3
+
+        # Closest evaporation
+        evap_idx = num_piezo + num_pump + num_prec + np.argmin(
+            dist_matrix[i, num_piezo + num_pump + num_prec:num_piezo + num_pump + num_prec + num_evap])
+        adj_matrix[i, evap_idx] = 0.4
+
+        # Two closest rivers
+        river_indices = np.argsort(dist_matrix[i, -num_river:])[:2] + (num_nodes - num_river)
+        adj_matrix[i, river_indices] = 0.5
+
+    adj_matrix = np.maximum(adj_matrix, adj_matrix.T)
+    return adj_matrix
+
+
 def generate_mixed_optimal_adjacency(rmse_table_path, variant_adj_matrices, num_piezo,
                                      fallback_variant='default'):
     """Build a mixed adjacency matrix by selecting each piezometer node's row
@@ -970,6 +1063,16 @@ def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, perce
                   feature_importance_multiplier=feature_importance_multiplier,
                   rf_weight_min=rf_weight_min, rf_weight_max=rf_weight_max)
           np.save(GENERATED_GRAPHS / f"{graph_tag}.npy", adj_matrix)
+
+    elif graph_type in ('hydraulic_dijkstra', 'hydraulic_straight'):
+        mode = 'dijkstra' if graph_type == 'hydraulic_dijkstra' else 'straight'
+        adj_matrix = generate_hydraulic_adjacency_matrix(
+            coordinates, df_piezo_columns, num_piezo, num_pump, num_prec,
+            num_evap, num_river, n_piezo_connected=n_piezo_connected,
+            n_pumps_connected=n_pumps_connected,
+            resistance_mode=mode,
+            weight_min=rf_weight_min, weight_max=rf_weight_max)
+        np.save(GENERATED_GRAPHS / f"{graph_tag}.npy", adj_matrix)
 
     elif graph_type == 'mixed':
         if rmse_table_path is None or variant_graph_paths is None:
