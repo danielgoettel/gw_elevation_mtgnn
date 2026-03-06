@@ -384,90 +384,76 @@ def generate_layer_constrained_adjacency_matrix(
     adj_matrix = np.maximum(adj_matrix, adj_matrix.T)
 
     return adj_matrix
-"""
-Latent feature distance based graph is based on Liu et al 2025.  The graph uses euclidian distance as well as hydraulic conductivity to create a feature-based distance calculation based on the equation:
-dist(Vi​,Vj​)= ΔX2 + ΔY2 + ΔZ + ΔKx2 ​+ ΔKy2 ​+ ΔKz2 ​+ Δh2​
-
-Where x,y,z are the coordinates of the screen midpoint, Kx, Ky, and Kz are the change in k in x, y, and z, and h is average head over the available date set for each well.
-
-#TODO Import pump distances, regis layer names, and historic hydraulic head data.
-#TODO For each location calculate the average head in the data set.
-#TODO For 
-
-"""
-def generate_latent_feature_distance_graph(
-        all_coords, piezo_names, num_piezo, num_pump, num_prec, num_evap, num_river,
-        layer_column="regis_layer", percentage=None, n_piezo_connected=3, n_pumps_connected=4
-):
-
-"""
-    Parameters
-    ----------
-    all_coords : ndarray
-        Coordinates of all nodes (piezometers + exogenous).
-    piezo_names : list
-        List of piezometer names.
-    layer_column : str
-        Either 'geolayer' or 'regis_layer'.
-    Returns
-    -------
-    adj_matrix : ndarray
-        Symmetric adjacency matrix.
-
-    from preprocessing import euclidean_distance
-
-    # Load geolayer/regis_layer info
-    layer_df = pd.read_csv(PIEZO_LAYER_INFORMATION).set_index("name")
-    layer_labels = layer_df.loc[piezo_names, layer_column].fillna("MISSING").values
-
-    # Read pump distances
-    pumps = pd.read_csv(PUMP_DISTANCES, header=0, index_col=0)
-    closest_pumps = get_n_closest_pumps_indices(n_pumps_connected, num_piezo, pump_distances_file=PUMP_DISTANCES)
-
-    num_nodes = len(all_coords)
-    adj_matrix = np.zeros((num_nodes, num_nodes))
-    dist_matrix = np.zeros((num_nodes, num_nodes))
-
-    # Compute distance matrix
-    for i in range(num_nodes):
-        for j in range(num_nodes):
-            dist_matrix[i, j] = euclidean_distance(
-                all_coords[i, 0], all_coords[i, 1], all_coords[j, 0], all_coords[j, 1]
-            )
-
-    # Connect piezometers only within same layer
-    for i in range(num_piezo):
-        same_layer = [
-            j for j in range(num_piezo)
-            if i != j and layer_labels[i] == layer_labels[j]
-        ]
-        if same_layer:
-            nearest = sorted(same_layer, key=lambda j: dist_matrix[i, j])[:n_piezo_connected]
-            adj_matrix[i, nearest] = 0.1
-
-    # Connect piezometers to exogenous nodes
-    selected_indices = (
-        np.random.choice(num_nodes, int(np.ceil(num_nodes * (percentage / 100.0))), replace=False)
-        if percentage is not None else range(num_nodes)
-    )
-
-    for i in selected_indices:
-        if i < num_piezo:
-            pump_indices = closest_pumps[i].tolist()
-            prec_idx = num_piezo + num_pump + np.argmin(
-                dist_matrix[i, num_piezo + num_pump:num_piezo + num_pump + num_prec])
-            evap_idx = num_piezo + num_pump + num_prec + np.argmin(
-                dist_matrix[i, num_piezo + num_pump + num_prec:num_piezo + num_pump + num_prec + num_evap])
-            river_idxs = np.argsort(dist_matrix[i, -num_river:])[:2] + (num_nodes - num_river)
-
-            adj_matrix[i, pump_indices] = 0.2
-            adj_matrix[i, prec_idx] = 0.3
-            adj_matrix[i, evap_idx] = 0.4
-            adj_matrix[i, river_idxs] = 0.5
-
-    adj_matrix = adj_matrix + adj_matrix.T
-    return adj_matrix  # Symmetric adjacency matrix
-"""
+# TODO: WIP — Latent feature distance graph (Liu et al 2025)
+# Uses euclidean distance + hydraulic conductivity + head for feature-based distance:
+# dist(Vi,Vj) = sqrt(ΔX² + ΔY² + ΔZ² + ΔKx² + ΔKy² + ΔKz² + Δh²)
+#
+# def generate_latent_feature_distance_graph(
+#         all_coords, piezo_names, num_piezo, num_pump, num_prec, num_evap, num_river,
+#         layer_column="regis_layer", percentage=None, n_piezo_connected=3, n_pumps_connected=4
+# ):
+#     """
+#     Parameters
+#     ----------
+#     all_coords : ndarray
+#         Coordinates of all nodes (piezometers + exogenous).
+#     piezo_names : list
+#         List of piezometer names.
+#     layer_column : str
+#         Either 'geolayer' or 'regis_layer'.
+#     Returns
+#     -------
+#     adj_matrix : ndarray
+#         Symmetric adjacency matrix.
+#     """
+#     from preprocessing import euclidean_distance
+#
+#     layer_df = pd.read_csv(PIEZO_LAYER_INFORMATION).set_index("name")
+#     layer_labels = layer_df.loc[piezo_names, layer_column].fillna("MISSING").values
+#
+#     pumps = pd.read_csv(PUMP_DISTANCES, header=0, index_col=0)
+#     closest_pumps = get_n_closest_pumps_indices(n_pumps_connected, num_piezo, pump_distances_file=PUMP_DISTANCES)
+#
+#     num_nodes = len(all_coords)
+#     adj_matrix = np.zeros((num_nodes, num_nodes))
+#     dist_matrix = np.zeros((num_nodes, num_nodes))
+#
+#     for i in range(num_nodes):
+#         for j in range(num_nodes):
+#             dist_matrix[i, j] = euclidean_distance(
+#                 all_coords[i, 0], all_coords[i, 1], all_coords[j, 0], all_coords[j, 1]
+#             )
+#
+#     for i in range(num_piezo):
+#         same_layer = [
+#             j for j in range(num_piezo)
+#             if i != j and layer_labels[i] == layer_labels[j]
+#         ]
+#         if same_layer:
+#             nearest = sorted(same_layer, key=lambda j: dist_matrix[i, j])[:n_piezo_connected]
+#             adj_matrix[i, nearest] = 0.1
+#
+#     selected_indices = (
+#         np.random.choice(num_nodes, int(np.ceil(num_nodes * (percentage / 100.0))), replace=False)
+#         if percentage is not None else range(num_nodes)
+#     )
+#
+#     for i in selected_indices:
+#         if i < num_piezo:
+#             pump_indices = closest_pumps[i].tolist()
+#             prec_idx = num_piezo + num_pump + np.argmin(
+#                 dist_matrix[i, num_piezo + num_pump:num_piezo + num_pump + num_prec])
+#             evap_idx = num_piezo + num_pump + num_prec + np.argmin(
+#                 dist_matrix[i, num_piezo + num_pump + num_prec:num_piezo + num_pump + num_prec + num_evap])
+#             river_idxs = np.argsort(dist_matrix[i, -num_river:])[:2] + (num_nodes - num_river)
+#
+#             adj_matrix[i, pump_indices] = 0.2
+#             adj_matrix[i, prec_idx] = 0.3
+#             adj_matrix[i, evap_idx] = 0.4
+#             adj_matrix[i, river_idxs] = 0.5
+#
+#     adj_matrix = adj_matrix + adj_matrix.T
+#     return adj_matrix
 
 def generate_rf_adjacency_fixed(
     piezo_columns: list,
