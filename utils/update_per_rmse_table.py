@@ -60,12 +60,21 @@ def collect_rmse_rows(input_folder, piezo_names):
     input_folder = Path(input_folder)
     rows = []
 
-    # Iterate over graph_type subfolders
-    for gt_dir in sorted(input_folder.iterdir()):
-        if not gt_dir.is_dir():
-            continue
-        graph_type = gt_dir.name
+    # Detect structure: does input_folder contain graph_type subdirs, or run folders directly?
+    # If any immediate child has an eval_fw* subfolder, treat input_folder as a single graph_type.
+    has_run_folders = any(
+        (child / 'eval_fw1').exists() or (child / 'eval_fw3').exists()
+        for child in input_folder.iterdir() if child.is_dir()
+    )
 
+    if has_run_folders:
+        # Flat mode: input_folder IS the graph_type folder
+        gt_dirs = [(input_folder, input_folder.name)]
+    else:
+        # Nested mode: input_folder contains graph_type subdirectories
+        gt_dirs = [(d, d.name) for d in sorted(input_folder.iterdir()) if d.is_dir()]
+
+    for gt_dir, graph_type in gt_dirs:
         # Iterate over run folders
         for run_dir in sorted(gt_dir.iterdir()):
             if not run_dir.is_dir():
@@ -113,6 +122,8 @@ def main():
                         help='Path to column_names_real.txt (auto-detected if not given)')
     parser.add_argument('--output-name', default='per_node_rmse_comparison.xlsx',
                         help='Output filename (default: per_node_rmse_comparison.xlsx)')
+    parser.add_argument('--append', action='store_true',
+                        help='Append to existing file instead of overwriting')
     args = parser.parse_args()
 
     # Auto-detect piezo names
@@ -147,6 +158,15 @@ def main():
     # Write output
     output_path = Path(args.output_folder) / args.output_name
     output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if args.append and output_path.exists():
+        existing = pd.read_excel(str(output_path))
+        df = pd.concat([existing, df], ignore_index=True)
+        # Drop exact duplicates (same Variant + Seed + F_w)
+        df = df.drop_duplicates(subset=['Variant', 'Seed', 'F_w'], keep='last')
+        df = df.sort_values(['Variant', 'Seed', 'F_w']).reset_index(drop=True)
+        print(f"Appending to existing file ({len(existing)} existing + {len(rows)} new rows)")
+
     df.to_excel(str(output_path), index=False, sheet_name='Per-Node RMSE Comparison')
 
     print(f"\nWrote {len(df)} rows to {output_path}")
