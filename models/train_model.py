@@ -534,7 +534,11 @@ def main(run_all=True):
             for col_name, rmse_val in zip(best_piezo_cols, best_per_node):
                 node_row[col_name] = rmse_val
 
-            if config.get('seed') is not None:
+            if config.get('seed') is not None and config.get('exclude_nodes'):
+                seed_out = OUTPUTS_DIR / "seed_experiment_drop_node"
+                os.makedirs(str(seed_out), exist_ok=True)
+                node_path = seed_out / "per_node_results.xlsx"
+            elif config.get('seed') is not None:
                 seed_out = OUTPUTS_DIR / "seed_experiment"
                 os.makedirs(str(seed_out), exist_ok=True)
                 node_path = seed_out / "per_node_results.xlsx"
@@ -641,7 +645,11 @@ def main(run_all=True):
                 print(f"→ Appended multi-support result to {ms_path}")
                 continue  # Skip overall_results for multi-support runs
 
-            if config.get('seed') is not None:
+            if config.get('seed') is not None and config.get('exclude_nodes'):
+                seed_out = OUTPUTS_DIR / "seed_experiment_drop_node"
+                os.makedirs(str(seed_out), exist_ok=True)
+                overall_path = seed_out / "seed_experiment_results.xlsx"
+            elif config.get('seed') is not None:
                 seed_out = OUTPUTS_DIR / "seed_experiment"
                 os.makedirs(str(seed_out), exist_ok=True)
                 overall_path = seed_out / "seed_experiment_results.xlsx"
@@ -775,6 +783,8 @@ def run_training_and_evaluation(config):
         run_dir = OUTPUTS_DIR / "multi_support" / model_base
     elif config.get('build_adj'):
         run_dir = OUTPUTS_DIR / "adaptive" / model_base
+    elif config.get('seed') is not None and config.get('exclude_nodes'):
+        run_dir = OUTPUTS_DIR / "seed_experiment_drop_node" / config['graph_type'] / model_base
     elif config.get('seed') is not None:
         run_dir = OUTPUTS_DIR / "seed_experiment" / config['graph_type'] / model_base
     else:
@@ -788,6 +798,43 @@ def run_training_and_evaluation(config):
         resampling_freq=config.get('resampling_freq', 'W')
     )
     train_data.to_csv(RANDOM_FOREST_TRAINING_DATA)
+
+    # ── Temp fix: exclude specific nodes before graph construction ──
+    exclude_nodes = config.get('exclude_nodes', [])
+    if exclude_nodes:
+        drop_idx = [i for i, c in enumerate(df_piezo_columns) if c in exclude_nodes]
+        drop_names = [df_piezo_columns[i] for i in drop_idx]
+        print(f"[Exclude Nodes] Dropping {drop_names} (indices {drop_idx})")
+
+        # Remove from piezometer column list
+        df_piezo_columns = [c for c in df_piezo_columns if c not in exclude_nodes]
+
+        # Remove columns from data and masks
+        for df in (train_data, val_data, test_data):
+            df.drop(columns=drop_names, inplace=True, errors='ignore')
+        for msk in (train_mask, val_mask, test_mask):
+            msk.drop(columns=drop_names, inplace=True, errors='ignore')
+
+        # Rebuild mean GW elevation without dropped nodes
+        keep_idx = [i for i in range(len(mean_gw_elevation)) if i not in drop_idx]
+        mean_gw_elevation = mean_gw_elevation[keep_idx]
+
+        # Rebuild scaler to match new column layout (drop the excluded columns from fitted params)
+        from sklearn.preprocessing import MinMaxScaler
+        all_keep = [i for i in range(scaler.n_features_in_) if i not in drop_idx]
+        new_scaler = MinMaxScaler(feature_range=(0, 1))
+        new_scaler.n_features_in_ = len(all_keep)
+        new_scaler.data_min_ = scaler.data_min_[all_keep]
+        new_scaler.data_max_ = scaler.data_max_[all_keep]
+        new_scaler.data_range_ = scaler.data_range_[all_keep]
+        new_scaler.scale_ = scaler.scale_[all_keep]
+        new_scaler.min_ = scaler.min_[all_keep]
+        new_scaler.feature_names_in_ = np.array([scaler.feature_names_in_[i] for i in all_keep]) if hasattr(scaler, 'feature_names_in_') else None
+        scaler = new_scaler
+
+        num_piezo = len(df_piezo_columns)
+        print(f"[Exclude Nodes] Remaining piezometers: {num_piezo}")
+    # ── End temp fix ──
 
     if config['graph_type'] == 'mixed':
         # Build all 6 variant adjacency matrices, then let mixed selector pick per-node best

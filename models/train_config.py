@@ -75,17 +75,28 @@ def define_base_configuration():
 # Explicit configuration list — each dict overrides base_config for that run.
 # When this list is non-empty, parameter_variations is ignored.
 # --------------------------------------------------------------------------
+_DROP_NODE = ['B39F0739-003']
+_SEEDS = [42, 123, 256, 512, 777, 1024, 2048, 3141]
+
 explicit_configs = [
-    # ---- Mixed-optimal graph x 8 seeds ----
-    {'graph_type': 'mixed', 'seed': 42},
-    {'graph_type': 'mixed', 'seed': 123},
-    {'graph_type': 'mixed', 'seed': 256},
-    {'graph_type': 'mixed', 'seed': 512},
-    {'graph_type': 'mixed', 'seed': 777},
-    {'graph_type': 'mixed', 'seed': 1024},
-    {'graph_type': 'mixed', 'seed': 2048},
-    {'graph_type': 'mixed', 'seed': 3141},
+    # ---- Drop high-RMSE node: default, geolayer, rf x 8 seeds ----
+    *[{'graph_type': gt, 'seed': s, 'exclude_nodes': _DROP_NODE}
+      for gt in ('default', 'geolayer', 'rf')
+      for s in _SEEDS],
 ]
+
+# Previous config (kept for reference):
+# explicit_configs = [
+#     # ---- Mixed-optimal graph x 8 seeds ----
+#     {'graph_type': 'mixed', 'seed': 42},
+#     {'graph_type': 'mixed', 'seed': 123},
+#     {'graph_type': 'mixed', 'seed': 256},
+#     {'graph_type': 'mixed', 'seed': 512},
+#     {'graph_type': 'mixed', 'seed': 777},
+#     {'graph_type': 'mixed', 'seed': 1024},
+#     {'graph_type': 'mixed', 'seed': 2048},
+#     {'graph_type': 'mixed', 'seed': 3141},
+# ]
 
 # Define variations for each parameter (Cartesian product — only used when explicit_configs is empty)
 parameter_variations = {
