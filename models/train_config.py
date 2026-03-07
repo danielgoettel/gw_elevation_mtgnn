@@ -94,10 +94,11 @@ explicit_configs = [
        'adaptive_graph_type': 'rf', 'adaptive_weight_mode': 'fixed',
        'seed': s, 'seed_experiment_name': _5R_TAG}
       for s in _SEEDS],
-    # ---- 5 rivers: RF full VIM (threshold-based, min 3 connections) x 8 seeds ----
-    *[{'graph_type': 'rf', 'weight_mode': 'full', 'rf_vim_min': 0.01,
+    # ---- 5 rivers: RF full VIM (threshold-based, min 3 connections) x 4 thresholds x 8 seeds ----
+    *[{'graph_type': 'rf', 'weight_mode': 'full', 'rf_vim_min': vim,
        'rf_min_connections': 3,
        'seed': s, 'seed_experiment_name': _5R_TAG}
+      for vim in [0.01, 0.02, 0.05, 0.1]
       for s in _SEEDS],
 ]
 
