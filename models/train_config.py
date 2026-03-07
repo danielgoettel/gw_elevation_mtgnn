@@ -57,6 +57,7 @@ def define_base_configuration():
 
         # RF full VIM mode — minimum importance threshold (weight_mode='full')
         'rf_vim_min': 0.01,
+        'rf_min_connections': 3,   # Minimum piezo-piezo connections in full VIM mode
 
         # Data resampling — 'W' for weekly, 'D' for daily, None for native 3-hourly
         'resampling_freq': 'W',
@@ -91,6 +92,11 @@ explicit_configs = [
       for s in _SEEDS],
     *[{'graph_type': 'rf', 'weight_mode': 'fixed', 'multi_support': True,
        'adaptive_graph_type': 'rf', 'adaptive_weight_mode': 'fixed',
+       'seed': s, 'seed_experiment_name': _5R_TAG}
+      for s in _SEEDS],
+    # ---- 5 rivers: RF full VIM (threshold-based, min 3 connections) x 8 seeds ----
+    *[{'graph_type': 'rf', 'weight_mode': 'full', 'rf_vim_min': 0.01,
+       'rf_min_connections': 3,
        'seed': s, 'seed_experiment_name': _5R_TAG}
       for s in _SEEDS],
 ]

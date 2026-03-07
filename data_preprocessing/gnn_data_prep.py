@@ -622,6 +622,7 @@ def generate_rf_full_vim_matrix(
         num_river: int,
         vim_min: float = 0.01,
         n_top_connections: int = None,
+        n_min_connections: int = 3,
         n_pumps_connected: int = 4,
         feature_importance_multiplier: float = 1.0,
         rf_weight_min: float = 0.08,
@@ -629,7 +630,9 @@ def generate_rf_full_vim_matrix(
 ) -> np.ndarray:
     """
     Full RF adjacency: keep ALL piezo-piezo connections where
-    RF importance >= vim_min. Optionally also limit to top-N per node.
+    RF importance >= vim_min. If a node ends up with fewer than
+    n_min_connections, its top-n peers by importance are added regardless
+    of threshold. Optionally also limit to top-N per node.
     Exogenous edges use fixed weights: pumps (0.2), precipitation (0.3), evaporation (0.4), rivers (0.5).
     """
     # Load the FULL RF matrix (N×N)
@@ -644,7 +647,7 @@ def generate_rf_full_vim_matrix(
     # Actual node count (may differ from RF matrix if nodes were dropped)
     num_nodes = num_piezo + num_pump + num_prec + num_evap + num_river
 
-    print(f"VIM threshold: {vim_min}, top-N cap: {n_top_connections}")
+    print(f"VIM threshold: {vim_min}, top-N cap: {n_top_connections}, min connections: {n_min_connections}")
 
     # Prepare adjacency — sized to actual node count, not RF matrix
     adj = np.zeros((num_nodes, num_nodes), dtype=float)
@@ -659,6 +662,11 @@ def generate_rf_full_vim_matrix(
         row = rf_full[i, :num_piezo].copy()
         row[i] = 0  # no self-loops
         mask = row >= vim_min
+        # Guarantee minimum connectivity: if threshold leaves too few,
+        # add top-n peers by importance
+        if mask.sum() < n_min_connections:
+            topk = np.argsort(row)[-n_min_connections:]
+            mask[topk] = True
         if n_top_connections is not None:
             candidates = np.where(mask)[0]
             if len(candidates) > n_top_connections:
@@ -930,7 +938,7 @@ def generate_mixed_optimal_adjacency(rmse_table_path, variant_adj_matrices, num_
     return mixed_adj, best_variant_per_node
 
 
-def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, percentage=None, n_piezo_connected=3, feature_importance_multiplier = None, n_pumps_connected = 4, weight_mode = 'fixed', same_layer = False, directed_graph=False, mean_gw_elevation=None, rf_weight_min=0.08, rf_weight_max=0.2, rf_vim_min=0.01, rmse_table_path=None, variant_graph_paths=None):
+def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, percentage=None, n_piezo_connected=3, feature_importance_multiplier = None, n_pumps_connected = 4, weight_mode = 'fixed', same_layer = False, directed_graph=False, mean_gw_elevation=None, rf_weight_min=0.08, rf_weight_max=0.2, rf_vim_min=0.01, rf_min_connections=3, rmse_table_path=None, variant_graph_paths=None):
     # Paths to the metadata files (update these paths according to your folder structure)
 
     metadata_path = PIEZO_METADATA
@@ -1011,6 +1019,7 @@ def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, perce
                   df_piezo_columns, coordinates, num_piezo, num_pump, num_prec,
                   num_evap, num_river, vim_min=rf_vim_min,
                   n_top_connections=n_piezo_connected if n_piezo_connected != 3 else None,
+                  n_min_connections=rf_min_connections,
                   n_pumps_connected=n_pumps_connected,
                   feature_importance_multiplier=feature_importance_multiplier,
                   rf_weight_min=rf_weight_min, rf_weight_max=rf_weight_max)
