@@ -649,13 +649,16 @@ def main(run_all=True):
                 print(f"→ Appended multi-support result to {ms_path}")
                 continue  # Skip overall_results for multi-support runs
 
-            if config.get('seed') is not None and config.get('exclude_nodes'):
+            if config.get('seed') is not None and config.get('seed_experiment_name'):
+                seed_out = OUTPUTS_DIR / config['seed_experiment_name']
+                os.makedirs(str(seed_out), exist_ok=True)
+                overall_path = seed_out / "seed_experiment_results.xlsx"
+            elif config.get('seed') is not None and config.get('exclude_nodes'):
                 seed_out = OUTPUTS_DIR / "seed_experiment_drop_node"
                 os.makedirs(str(seed_out), exist_ok=True)
                 overall_path = seed_out / "seed_experiment_results.xlsx"
             elif config.get('seed') is not None:
-                seed_folder = config.get('seed_experiment_name', 'seed_experiment')
-                seed_out = OUTPUTS_DIR / seed_folder
+                seed_out = OUTPUTS_DIR / 'seed_experiment'
                 os.makedirs(str(seed_out), exist_ok=True)
                 overall_path = seed_out / "seed_experiment_results.xlsx"
             else:
@@ -706,9 +709,28 @@ def main(run_all=True):
                     node_stats = classify_nodes(df_best, piezo_name_list)
                     out_path = seed_out / "per_node_rmse_comparison.xlsx"
                     write_comparison_xlsx(out_path, df_best, node_stats, piezo_name_list)
-                    print(f"→ Auto-built per-node RMSE comparison: {out_path} ({len(df_best)} runs)")
+                    print(f"-> Auto-built per-node RMSE comparison: {out_path} ({len(df_best)} runs)")
+
+                    # Also write per_node_rmse_all_variants.xlsx (format used by mixed-model builder)
+                    from openpyxl import Workbook as _Workbook
+                    _wb = _Workbook()
+                    _ws = _wb.active
+                    _ws.title = 'Per-Node RMSE Comparison'
+                    _ws.cell(1, 1, f'Per-Node RMSE Comparison - {seed_folder}')
+                    _cols = ['Variant', 'Seed', 'F_w', 'Overall RMSE'] + piezo_name_list
+                    for j, c in enumerate(_cols, 1):
+                        _ws.cell(3, j, c)
+                    for ri, (_, row) in enumerate(df_best.sort_values(['Variant', 'Seed']).iterrows()):
+                        for j, c in enumerate(_cols, 1):
+                            val = row.get(c)
+                            if isinstance(val, float):
+                                val = round(val, 4)
+                            _ws.cell(4 + ri, j, val)
+                    _variants_path = seed_out / "per_node_rmse_all_variants.xlsx"
+                    _wb.save(str(_variants_path))
+                    print(f"-> Auto-built mixed-model RMSE table: {_variants_path}")
         except Exception as e:
-            print(f"⚠ Could not auto-build RMSE comparison table: {e}")
+            print(f"WARNING: Could not auto-build RMSE comparison table: {e}")
 
 
 def evaluate_and_output(model, config, test_data, test_mask, df_piezo_columns, num_piezo,
