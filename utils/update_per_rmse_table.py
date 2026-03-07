@@ -34,8 +34,8 @@ def parse_run_folder(run_path, graph_type):
     seed_match = re.search(r'_s(\d+)$', name)
     seed = int(seed_match.group(1)) if seed_match else None
 
-    # Weight mode
-    wm_match = re.search(r'_WM[: _]+(\w+)', name)
+    # Weight mode — match only the mode word, not trailing _SAMELAYER etc.
+    wm_match = re.search(r'_WM[: _]+(fixed|variable)', name)
     weight_mode = wm_match.group(1) if wm_match else 'fixed'
 
     # Layer constrain
@@ -114,6 +114,184 @@ def collect_rmse_rows(input_folder, piezo_names):
     return rows
 
 
+def select_best_fw(df, piezo_names):
+    """For each (Variant, Seed), keep only the F_w with the lowest Overall RMSE."""
+    best_rows = []
+    for (variant, seed), grp in df.groupby(['Variant', 'Seed']):
+        best_idx = grp['Overall RMSE'].idxmin()
+        best_rows.append(grp.loc[best_idx])
+    return pd.DataFrame(best_rows).reset_index(drop=True)
+
+
+def classify_nodes(df_best, piezo_names):
+    """
+    Classify each piezometer as Consistent Low / Moderate / High / Model-Dependent.
+
+    Returns
+    -------
+    node_stats : DataFrame with columns [name, mean_rmse, cv_variant, category]
+        Sorted by mean_rmse descending (highest RMSE first).
+    """
+    variants = sorted(df_best['Variant'].unique())
+
+    # Per-variant mean RMSE for each node
+    variant_means = {}
+    for v in variants:
+        sub = df_best[df_best['Variant'] == v]
+        variant_means[v] = sub[piezo_names].mean(axis=0).values
+
+    variant_stack = np.array(list(variant_means.values()))  # (n_variants, n_nodes)
+    node_means = variant_stack.mean(axis=0)
+    node_cv = variant_stack.std(axis=0) / (variant_stack.mean(axis=0) + 1e-12)
+
+    categories = []
+    for i in range(len(piezo_names)):
+        if node_cv[i] > 0.15:
+            categories.append('Model-Dependent')
+        elif node_means[i] < 10:
+            categories.append('Consistent Low')
+        elif node_means[i] > 30:
+            categories.append('Consistent High')
+        else:
+            categories.append('Consistent Moderate')
+
+    node_stats = pd.DataFrame({
+        'name': piezo_names,
+        'mean_rmse': node_means,
+        'cv_variant': node_cv * 100,  # as percentage
+        'category': categories,
+    })
+    # Per-variant columns
+    for v in variants:
+        node_stats[f'rmse_{v}'] = variant_means[v]
+
+    # Sort by mean RMSE descending (highest first)
+    node_stats = node_stats.sort_values('mean_rmse', ascending=False).reset_index(drop=True)
+    return node_stats
+
+
+def write_comparison_xlsx(output_path, df_best, node_stats, piezo_names):
+    """
+    Write a formatted Excel workbook with:
+      Sheet 1 — Per-Node RMSE Comparison (columns sorted by mean RMSE descending)
+      Sheet 2 — Summary (category counts, variant stats, classification criteria)
+    """
+    # Sort piezo columns by mean RMSE descending
+    sorted_names = node_stats['name'].tolist()  # already sorted desc
+
+    # Build the Per-Node sheet: header rows + data rows
+    meta_cols = ['Variant', 'Seed', 'F_w', 'Overall RMSE']
+    col_order = meta_cols + sorted_names
+
+    # Row 1: Category labels
+    # Row 2: Mean RMSE per node
+    # Row 3: Column headers
+    # Rows 4+: Data
+
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'Per-Node RMSE Comparison'
+
+    cat_colors = {
+        'Consistent Low': '92D050',
+        'Consistent Moderate': 'FFC000',
+        'Consistent High': 'FF6666',
+        'Model-Dependent': '9BC2E6',
+    }
+
+    # --- Row 1: Category ---
+    ws.cell(1, 1, 'Category')
+    ws.cell(1, 1).font = Font(bold=True)
+    for ci, pname in enumerate(sorted_names):
+        cat = node_stats.loc[node_stats['name'] == pname, 'category'].iloc[0]
+        cell = ws.cell(1, len(meta_cols) + 1 + ci, cat)
+        cell.fill = PatternFill('solid', fgColor=cat_colors.get(cat, 'FFFFFF'))
+        cell.font = Font(size=8)
+
+    # --- Row 2: Mean RMSE ---
+    ws.cell(2, 1, 'Mean RMSE')
+    ws.cell(2, 1).font = Font(bold=True)
+    for ci, pname in enumerate(sorted_names):
+        mean_val = node_stats.loc[node_stats['name'] == pname, 'mean_rmse'].iloc[0]
+        ws.cell(2, len(meta_cols) + 1 + ci, round(mean_val, 2))
+
+    # --- Row 3: Headers ---
+    for ci, col in enumerate(col_order):
+        cell = ws.cell(3, ci + 1, col)
+        cell.font = Font(bold=True)
+
+    # --- Row 4+: Data rows (sorted by Variant, Seed) ---
+    df_sorted = df_best.sort_values(['Variant', 'Seed']).reset_index(drop=True)
+    for ri, (_, row) in enumerate(df_sorted.iterrows()):
+        for ci, col in enumerate(col_order):
+            val = row.get(col)
+            if isinstance(val, float):
+                val = round(val, 2)
+            ws.cell(4 + ri, ci + 1, val)
+
+    # Auto-fit column widths for meta columns
+    for ci in range(1, len(meta_cols) + 1):
+        ws.column_dimensions[get_column_letter(ci)].width = 14
+
+    # --- Summary sheet ---
+    ws2 = wb.create_sheet('Summary')
+
+    # Category summary
+    ws2.cell(1, 1, 'Category').font = Font(bold=True)
+    ws2.cell(1, 2, 'Count').font = Font(bold=True)
+    ws2.cell(1, 3, 'Mean RMSE').font = Font(bold=True)
+    ws2.cell(1, 4, 'Min RMSE').font = Font(bold=True)
+    ws2.cell(1, 5, 'Max RMSE').font = Font(bold=True)
+
+    for ri, cat in enumerate(['Consistent Low', 'Consistent Moderate', 'Consistent High', 'Model-Dependent']):
+        sub = node_stats[node_stats['category'] == cat]
+        ws2.cell(2 + ri, 1, cat)
+        ws2.cell(2 + ri, 1).fill = PatternFill('solid', fgColor=cat_colors[cat])
+        ws2.cell(2 + ri, 2, len(sub))
+        if len(sub) > 0:
+            ws2.cell(2 + ri, 3, round(sub['mean_rmse'].mean(), 2))
+            ws2.cell(2 + ri, 4, round(sub['mean_rmse'].min(), 2))
+            ws2.cell(2 + ri, 5, round(sub['mean_rmse'].max(), 2))
+
+    # Variant summary
+    row_offset = 7
+    ws2.cell(row_offset, 1, 'Variant').font = Font(bold=True)
+    ws2.cell(row_offset, 2, 'Mean RMSE').font = Font(bold=True)
+    ws2.cell(row_offset, 3, 'StdDev').font = Font(bold=True)
+
+    variants = sorted(df_best['Variant'].unique())
+    for vi, v in enumerate(variants):
+        sub = df_best[df_best['Variant'] == v]
+        ws2.cell(row_offset + 1 + vi, 1, v)
+        ws2.cell(row_offset + 1 + vi, 2, round(sub['Overall RMSE'].mean(), 2))
+        ws2.cell(row_offset + 1 + vi, 3, round(sub['Overall RMSE'].std(), 2))
+
+    # Classification criteria
+    row_offset2 = row_offset + 2 + len(variants)
+    criteria = [
+        'Classification Criteria:',
+        'Model-Dependent: CV across graph-type means > 15%',
+        'Consistent Low: mean RMSE < 10 cm',
+        'Consistent High: mean RMSE > 30 cm',
+        'Consistent Moderate: everything else',
+        f'Based on: {len(variants)} variants x {len(df_best["Seed"].unique())} seeds = {len(df_best)} runs, best F_w per run',
+    ]
+    for ci, text in enumerate(criteria):
+        ws2.cell(row_offset2 + ci, 1, text)
+
+    # Column widths
+    ws2.column_dimensions['A'].width = 60
+    for c in ['B', 'C', 'D', 'E']:
+        ws2.column_dimensions[c].width = 12
+
+    wb.save(str(output_path))
+    return output_path
+
+
 def main():
     parser = argparse.ArgumentParser(description='Build per-node RMSE table from seed experiment results.')
     parser.add_argument('input_folder', help='Root folder with graph_type subdirectories (e.g., seed_experiment/)')
@@ -160,21 +338,33 @@ def main():
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     if args.append and output_path.exists():
-        existing = pd.read_excel(str(output_path))
+        existing = pd.read_excel(str(output_path), sheet_name='Per-Node RMSE Comparison',
+                                 header=2)  # header on row 3
         df = pd.concat([existing, df], ignore_index=True)
         # Drop exact duplicates (same Variant + Seed + F_w)
         df = df.drop_duplicates(subset=['Variant', 'Seed', 'F_w'], keep='last')
         df = df.sort_values(['Variant', 'Seed', 'F_w']).reset_index(drop=True)
         print(f"Appending to existing file ({len(existing)} existing + {len(rows)} new rows)")
 
-    df.to_excel(str(output_path), index=False, sheet_name='Per-Node RMSE Comparison')
+    # Select best F_w per (Variant, Seed), classify nodes, write formatted output
+    df_best = select_best_fw(df, piezo_names)
+    node_stats = classify_nodes(df_best, piezo_names)
+    write_comparison_xlsx(output_path, df_best, node_stats, piezo_names)
 
-    print(f"\nWrote {len(df)} rows to {output_path}")
-    print(f"Variants: {sorted(df['Variant'].unique())}")
-    print(f"Seeds: {sorted(df['Seed'].unique())}")
-    print(f"F_w values: {sorted(df['F_w'].unique())}")
-    print(f"Overall RMSE: mean={df['Overall RMSE'].mean():.2f}, "
-          f"std={df['Overall RMSE'].std():.2f}")
+    # Print summary
+    print(f"\nWrote {len(df_best)} rows (best F_w per variant×seed) to {output_path}")
+    print(f"Variants: {sorted(df_best['Variant'].unique())}")
+    print(f"Seeds: {sorted(df_best['Seed'].unique())}")
+    print(f"Overall RMSE: mean={df_best['Overall RMSE'].mean():.2f}, "
+          f"std={df_best['Overall RMSE'].std():.2f}")
+    print(f"\nNode classification:")
+    for cat in ['Consistent Low', 'Consistent Moderate', 'Consistent High', 'Model-Dependent']:
+        n = (node_stats['category'] == cat).sum()
+        if n > 0:
+            sub = node_stats[node_stats['category'] == cat]
+            print(f"  {cat}: {n} nodes (RMSE {sub['mean_rmse'].min():.1f} – {sub['mean_rmse'].max():.1f})")
+        else:
+            print(f"  {cat}: 0 nodes")
 
 
 if __name__ == '__main__':

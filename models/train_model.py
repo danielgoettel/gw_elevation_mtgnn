@@ -534,13 +534,16 @@ def main(run_all=True):
             for col_name, rmse_val in zip(best_piezo_cols, best_per_node):
                 node_row[col_name] = rmse_val
 
-            if config.get('seed') is not None and config.get('exclude_nodes'):
+            if config.get('seed') is not None and config.get('seed_experiment_name'):
+                seed_out = OUTPUTS_DIR / config['seed_experiment_name']
+                os.makedirs(str(seed_out), exist_ok=True)
+                node_path = seed_out / "per_node_results.xlsx"
+            elif config.get('seed') is not None and config.get('exclude_nodes'):
                 seed_out = OUTPUTS_DIR / "seed_experiment_drop_node"
                 os.makedirs(str(seed_out), exist_ok=True)
                 node_path = seed_out / "per_node_results.xlsx"
             elif config.get('seed') is not None:
-                seed_folder = config.get('seed_experiment_name', 'seed_experiment')
-                seed_out = OUTPUTS_DIR / seed_folder
+                seed_out = OUTPUTS_DIR / 'seed_experiment'
                 os.makedirs(str(seed_out), exist_ok=True)
                 node_path = seed_out / "per_node_results.xlsx"
             else:
@@ -684,6 +687,29 @@ def main(run_all=True):
     if run_all:
         analyze_results()
 
+    # Auto-build per-node RMSE comparison table for seed experiments
+    if base_config.get('seed') is not None:
+        seed_folder = base_config.get('seed_experiment_name', 'seed_experiment')
+        seed_out = OUTPUTS_DIR / seed_folder
+        try:
+            from utils.update_per_rmse_table import collect_rmse_rows, select_best_fw, classify_nodes, write_comparison_xlsx
+            from config import PREPROCESSED_DIR
+            names_path = PREPROCESSED_DIR / "column_names_real.txt"
+            if names_path.exists():
+                with open(names_path) as f:
+                    piezo_name_list = [l.strip() for l in f if l.strip()]
+                rows = collect_rmse_rows(str(seed_out), piezo_name_list)
+                if rows:
+                    import pandas as _pd
+                    df_all = _pd.DataFrame(rows).sort_values(['Variant', 'Seed', 'F_w']).reset_index(drop=True)
+                    df_best = select_best_fw(df_all, piezo_name_list)
+                    node_stats = classify_nodes(df_best, piezo_name_list)
+                    out_path = seed_out / "per_node_rmse_comparison.xlsx"
+                    write_comparison_xlsx(out_path, df_best, node_stats, piezo_name_list)
+                    print(f"→ Auto-built per-node RMSE comparison: {out_path} ({len(df_best)} runs)")
+        except Exception as e:
+            print(f"⚠ Could not auto-build RMSE comparison table: {e}")
+
 
 def evaluate_and_output(model, config, test_data, test_mask, df_piezo_columns, num_piezo,
                         scaler, A_tilde, static_features, W, device, run_dir, model_type,
@@ -785,10 +811,13 @@ def run_training_and_evaluation(config):
         run_dir = OUTPUTS_DIR / "multi_support" / model_base
     elif config.get('build_adj'):
         run_dir = OUTPUTS_DIR / "adaptive" / model_base
+    elif config.get('seed') is not None and config.get('seed_experiment_name'):
+        seed_folder = config['seed_experiment_name']
+        run_dir = OUTPUTS_DIR / seed_folder / config['graph_type'] / model_base
     elif config.get('seed') is not None and config.get('exclude_nodes'):
         run_dir = OUTPUTS_DIR / "seed_experiment_drop_node" / config['graph_type'] / model_base
     elif config.get('seed') is not None:
-        seed_folder = config.get('seed_experiment_name', 'seed_experiment')
+        seed_folder = 'seed_experiment'
         run_dir = OUTPUTS_DIR / seed_folder / config['graph_type'] / model_base
     else:
         run_dir = OUTPUTS_DIR / config['graph_type'] / model_base
@@ -865,7 +894,15 @@ def run_training_and_evaluation(config):
             print(f"  Built adjacency for variant '{variant_label}'")
         static_features = sf  # all variants produce the same static features
 
-        rmse_table_path = config.get('rmse_table_path') or str(OUTPUTS_DIR / "per_node_rmse_all_variants.xlsx")
+        # Look for RMSE table: explicit path > seed experiment folder > default
+        rmse_table_path = config.get('rmse_table_path')
+        if not rmse_table_path:
+            seed_folder = config.get('seed_experiment_name', '')
+            candidate = OUTPUTS_DIR / seed_folder / "per_node_rmse_all_variants.xlsx"
+            if candidate.exists():
+                rmse_table_path = str(candidate)
+            else:
+                rmse_table_path = str(OUTPUTS_DIR / "per_node_rmse_all_variants.xlsx")
         A_tilde, static_features = gnn_data_prep.main(
             df_piezo_columns, pump_columns, locations_no_missing, 'mixed',
             config['percentage'], config['n_piezo_connected'],
