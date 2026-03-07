@@ -77,10 +77,22 @@ def define_base_configuration():
 # --------------------------------------------------------------------------
 _DROP_NODE = ['B39F0739-003']
 _SEEDS = [42, 123, 256, 512, 777, 1024, 2048, 3141]
+_5R_TAG = 'seed_experiment/5_rivers'
 
 explicit_configs = [
-    {'graph_type': 'hydraulic_dijkstra', 'seed': 42},
-    {'graph_type': 'hydraulic_straight', 'seed': 42},
+    # ---- 5 rivers: default, geolayer, rf variants x 8 seeds ----
+    *[{'graph_type': 'default', 'seed': s, 'seed_experiment_name': _5R_TAG}
+      for s in _SEEDS],
+    *[{'graph_type': 'geolayer', 'seed': s, 'seed_experiment_name': _5R_TAG}
+      for s in _SEEDS],
+    *[{'graph_type': 'rf', 'weight_mode': 'fixed', 'seed': s, 'seed_experiment_name': _5R_TAG}
+      for s in _SEEDS],
+    *[{'graph_type': 'rf', 'weight_mode': 'variable', 'seed': s, 'seed_experiment_name': _5R_TAG}
+      for s in _SEEDS],
+    *[{'graph_type': 'rf', 'weight_mode': 'fixed', 'layer_constrain': True, 'seed': s, 'seed_experiment_name': _5R_TAG}
+      for s in _SEEDS],
+    *[{'graph_type': 'rf', 'weight_mode': 'variable', 'layer_constrain': True, 'seed': s, 'seed_experiment_name': _5R_TAG}
+      for s in _SEEDS],
 ]
 
 # Previous config (kept for reference):

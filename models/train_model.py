@@ -539,7 +539,8 @@ def main(run_all=True):
                 os.makedirs(str(seed_out), exist_ok=True)
                 node_path = seed_out / "per_node_results.xlsx"
             elif config.get('seed') is not None:
-                seed_out = OUTPUTS_DIR / "seed_experiment"
+                seed_folder = config.get('seed_experiment_name', 'seed_experiment')
+                seed_out = OUTPUTS_DIR / seed_folder
                 os.makedirs(str(seed_out), exist_ok=True)
                 node_path = seed_out / "per_node_results.xlsx"
             else:
@@ -650,7 +651,8 @@ def main(run_all=True):
                 os.makedirs(str(seed_out), exist_ok=True)
                 overall_path = seed_out / "seed_experiment_results.xlsx"
             elif config.get('seed') is not None:
-                seed_out = OUTPUTS_DIR / "seed_experiment"
+                seed_folder = config.get('seed_experiment_name', 'seed_experiment')
+                seed_out = OUTPUTS_DIR / seed_folder
                 os.makedirs(str(seed_out), exist_ok=True)
                 overall_path = seed_out / "seed_experiment_results.xlsx"
             else:
@@ -786,7 +788,8 @@ def run_training_and_evaluation(config):
     elif config.get('seed') is not None and config.get('exclude_nodes'):
         run_dir = OUTPUTS_DIR / "seed_experiment_drop_node" / config['graph_type'] / model_base
     elif config.get('seed') is not None:
-        run_dir = OUTPUTS_DIR / "seed_experiment" / config['graph_type'] / model_base
+        seed_folder = config.get('seed_experiment_name', 'seed_experiment')
+        run_dir = OUTPUTS_DIR / seed_folder / config['graph_type'] / model_base
     else:
         run_dir = OUTPUTS_DIR / config['graph_type'] / model_base
     os.makedirs(str(run_dir), exist_ok=True)

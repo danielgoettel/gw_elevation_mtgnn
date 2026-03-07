@@ -132,40 +132,6 @@ def build_same_layer_block(
     return np.maximum(block, block.T)
 
 
-def penalize_exogenous_weights(
-    adj_matrix: np.ndarray,
-    piezo_names: list,
-    layer_csv: str,
-    layer_column: str,
-    target_layer: str,
-    exo_penalties: dict,
-) -> np.ndarray:
-    """
-    Apply penalty percentages to multiple types of exogenous connections
-    for piezometers in a specified geolayer.
-    """
-    df = pd.read_csv(PIEZO_LAYER_INFORMATION).set_index("name")
-    labels = df.loc[piezo_names, "geolayer"].fillna("MISSING").values
-
-    type_ranges = {
-        'pump':  list(range(200, 204)),
-        'prec':  list(range(204, 206)),
-        'evap':  list(range(206, 208)),
-        'river': list(range(208, 212))
-    }
-    for exo_type in exo_penalties:
-        if exo_type not in type_ranges:
-            raise ValueError(f"Invalid exo_type '{exo_type}' in penalties dict")
-
-    for i, layer in enumerate(labels):
-        if layer != target_layer:
-            continue
-        for exo_type, penalty in exo_penalties.items():
-            for j in type_ranges[exo_type]:
-                adj_matrix[i, j] *= (1 - penalty)
-                adj_matrix[j, i] *= (1 - penalty)
-
-    return adj_matrix
 
 
 def generate_adjacency_matrix(coordinates, threshold=0.5):
