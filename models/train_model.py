@@ -828,14 +828,17 @@ def run_training_and_evaluation(config):
     model_base = os.path.basename(
         generate_model_filename(future_window=F_w, **config)
     ).replace('.pt', '')
-    # Route runs to appropriate subfolders
-    if config.get('multi_support'):
+    # Route runs to appropriate subfolders (seed_experiment_name takes priority)
+    if config.get('seed') is not None and config.get('seed_experiment_name'):
+        seed_folder = config['seed_experiment_name']
+        gt_label = config['graph_type']
+        if config.get('multi_support'):
+            gt_label += '_multi_support'
+        run_dir = OUTPUTS_DIR / seed_folder / gt_label / model_base
+    elif config.get('multi_support'):
         run_dir = OUTPUTS_DIR / "multi_support" / model_base
     elif config.get('build_adj'):
         run_dir = OUTPUTS_DIR / "adaptive" / model_base
-    elif config.get('seed') is not None and config.get('seed_experiment_name'):
-        seed_folder = config['seed_experiment_name']
-        run_dir = OUTPUTS_DIR / seed_folder / config['graph_type'] / model_base
     elif config.get('seed') is not None and config.get('exclude_nodes'):
         run_dir = OUTPUTS_DIR / "seed_experiment_drop_node" / config['graph_type'] / model_base
     elif config.get('seed') is not None:

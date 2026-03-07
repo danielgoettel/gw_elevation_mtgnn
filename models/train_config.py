@@ -80,8 +80,10 @@ _SEEDS = [42, 123, 256, 512, 777, 1024, 2048, 3141]
 _5R_TAG = 'seed_experiment/5_rivers'
 
 explicit_configs = [
-    # ---- 5 rivers: mixed-optimal graph x 8 seeds ----
-    *[{'graph_type': 'mixed', 'seed': s, 'seed_experiment_name': _5R_TAG}
+    # ---- 5 rivers: multi-support (static + adaptive) x 8 seeds ----
+    *[{'graph_type': 'rf', 'weight_mode': 'fixed', 'multi_support': True,
+       'adaptive_graph_type': 'rf', 'adaptive_weight_mode': 'fixed',
+       'seed': s, 'seed_experiment_name': _5R_TAG}
       for s in _SEEDS],
 ]
 
