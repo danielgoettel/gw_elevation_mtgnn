@@ -70,6 +70,21 @@ def define_base_configuration():
         # Mixed-optimal graph — path to the RMSE table used to select best variant per node
         # Set to None to use default: OUTPUTS_DIR / "per_node_rmse_all_variants.xlsx"
         'rmse_table_path': None,
+
+        # Shortest-path graph (graph_type='shortest_path') — uses pre-computed
+        # Dijkstra resistance matrices from REGIS II subsurface data
+        'sp_config': {
+            'resistance_source': 'regis',    # 'regis' (full K) or 'binary' (aquifer/aquitard)
+            'sp_min_sensitivity': 0.0,       # min connectivity threshold (0 = use top-N only)
+            'sp_min_connections': 3,         # guaranteed min piezo-piezo connections
+            'piezo_weight_range': (0.08, 0.2),
+            'pump_weight_range': (0.15, 0.25),
+            'river_weight_range': (0.4, 0.6),
+            'n_rivers_connected': 2,
+            'include_pumps': True,
+            'include_rivers': True,
+            'use_hydraulic_exo': False,      # True = use resistance for pump/river weights
+        },
     }
 
 # --------------------------------------------------------------------------
@@ -99,6 +114,18 @@ explicit_configs = [
        'rf_min_connections': 3,
        'seed': s, 'seed_experiment_name': _5R_TAG}
       for vim in [0.01, 0.02, 0.05, 0.1]
+      for s in _SEEDS],
+    # ---- 5 rivers: shortest-path REGIS II (full K) x 8 seeds ----
+    # Requires: resistance_regis.npy in HYDRAULIC_RESISTANCE_DIR
+    *[{'graph_type': 'shortest_path',
+       'sp_config': {'resistance_source': 'regis'},
+       'seed': s, 'seed_experiment_name': _5R_TAG}
+      for s in _SEEDS],
+    # ---- 5 rivers: shortest-path binary (aquitard/aquifer) x 8 seeds ----
+    # Requires: resistance_binary.npy in HYDRAULIC_RESISTANCE_DIR
+    *[{'graph_type': 'shortest_path',
+       'sp_config': {'resistance_source': 'binary'},
+       'seed': s, 'seed_experiment_name': _5R_TAG}
       for s in _SEEDS],
 ]
 

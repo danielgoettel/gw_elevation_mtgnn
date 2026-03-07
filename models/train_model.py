@@ -467,7 +467,14 @@ def generate_configurations():
         configs = []
         for overrides in explicit_configs:
             cfg = base_config.copy()
-            cfg.update(overrides)
+            # Deep-merge sp_config so partial overrides inherit defaults
+            if 'sp_config' in overrides and 'sp_config' in cfg:
+                merged_sp = cfg['sp_config'].copy()
+                merged_sp.update(overrides['sp_config'])
+                cfg.update(overrides)
+                cfg['sp_config'] = merged_sp
+            else:
+                cfg.update(overrides)
             configs.append(cfg)
         return configs
 
@@ -832,6 +839,8 @@ def run_training_and_evaluation(config):
     if config.get('seed') is not None and config.get('seed_experiment_name'):
         seed_folder = config['seed_experiment_name']
         gt_label = config['graph_type']
+        if gt_label == 'shortest_path' and config.get('sp_config'):
+            gt_label += '_' + config['sp_config'].get('resistance_source', 'regis')
         if config.get('multi_support'):
             gt_label += '_multi_support'
         run_dir = OUTPUTS_DIR / seed_folder / gt_label / model_base
@@ -938,7 +947,7 @@ def run_training_and_evaluation(config):
             rmse_table_path=rmse_table_path,
             variant_graph_paths=variant_adj)
     else:
-        A_tilde, static_features = gnn_data_prep.main(df_piezo_columns, pump_columns, locations_no_missing, config['graph_type'], config['percentage'] , config['n_piezo_connected'], config['feature_importance_multiplier'], config['n_pumps_connected'], config['weight_mode'], config['layer_constrain'], directed_graph=config.get('directed_graph', False), mean_gw_elevation=mean_gw_elevation, rf_weight_min=config.get('rf_weight_min', 0.08), rf_weight_max=config.get('rf_weight_max', 0.2), rf_vim_min=config.get('rf_vim_min', 0.01), rf_min_connections=config.get('rf_min_connections', 3))
+        A_tilde, static_features = gnn_data_prep.main(df_piezo_columns, pump_columns, locations_no_missing, config['graph_type'], config['percentage'] , config['n_piezo_connected'], config['feature_importance_multiplier'], config['n_pumps_connected'], config['weight_mode'], config['layer_constrain'], directed_graph=config.get('directed_graph', False), mean_gw_elevation=mean_gw_elevation, rf_weight_min=config.get('rf_weight_min', 0.08), rf_weight_max=config.get('rf_weight_max', 0.2), rf_vim_min=config.get('rf_vim_min', 0.01), rf_min_connections=config.get('rf_min_connections', 3), sp_config=config.get('sp_config'))
 
     heatmap_title = (f"{config.get('model_type', 'MTGNN')} | graph={config['graph_type']} | "
                      f"weight_mode={config['weight_mode']}<br>"

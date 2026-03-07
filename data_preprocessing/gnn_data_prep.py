@@ -792,86 +792,169 @@ def load_and_concatenate_metadata(piezo_metadata_path, pump_metadata_path, evap_
     )
 
 
-def generate_hydraulic_adjacency_matrix(
+def generate_shortest_path_adjacency(
     all_coords, piezo_names, num_piezo, num_pump, num_prec, num_evap, num_river,
-    n_piezo_connected=3, n_pumps_connected=4, resistance_mode='dijkstra',
-    weight_min=0.08, weight_max=0.2
+    resistance_source='regis',
+    n_piezo_connected=3,
+    sp_min_sensitivity=0.0,
+    sp_min_connections=3,
+    piezo_weight_range=(0.08, 0.2),
+    pump_weight_range=(0.15, 0.25),
+    river_weight_range=(0.4, 0.6),
+    n_pumps_connected=4,
+    n_rivers_connected=2,
+    include_pumps=True,
+    include_rivers=True,
+    use_hydraulic_exo=False,
 ):
     """
-    Build adjacency matrix using pre-computed hydraulic resistance from GeoTOP.
+    Build adjacency matrix from pre-computed shortest-path resistance.
 
-    The piezo-piezo block uses the resistance matrix computed in the
-    hydraulic_connectivity_graph notebook.  Each piezometer connects to its
-    top-N lowest-resistance (= highest connectivity) neighbors, with edge
-    weights scaled to [weight_min, weight_max].  Exogenous connections
-    (pumps, precip, evap, rivers) follow the same distance-based rules as
-    the default graph.
+    Loads a 209x209 resistance matrix (200 piezo + 4 pump + 5 river) and
+    builds an adjacency matrix with configurable connectivity and weights.
 
     Parameters
     ----------
-    resistance_mode : str
-        'dijkstra' or 'straight' — selects which resistance .npy file to load.
+    resistance_source : str
+        Which resistance .npy to load: 'regis' (full REGIS II K values) or
+        'binary' (fixed K per layer type: aquifer vs aquitard).
+    n_piezo_connected : int
+        Number of top-N piezo-piezo connections per node.
+    sp_min_sensitivity : float
+        Minimum connectivity (1/resistance) to form an edge. Edges below
+        this threshold are dropped unless sp_min_connections requires them.
+    sp_min_connections : int
+        Guaranteed minimum piezo-piezo connections per node. If the
+        threshold yields fewer, top-N by connectivity are used instead.
+    piezo_weight_range : tuple (float, float)
+        (min, max) weight range for piezo-piezo edges (scaled by connectivity).
+    pump_weight_range : tuple (float, float)
+        (min, max) weight range for piezo-pump edges.
+    river_weight_range : tuple (float, float)
+        (min, max) weight range for piezo-river edges.
+    n_pumps_connected : int
+        Number of pumps to connect per piezometer.
+    n_rivers_connected : int
+        Number of rivers to connect per piezometer.
+    include_pumps : bool
+        Whether to include pump connections (if False, pump rows/cols are zero).
+    include_rivers : bool
+        Whether to include river connections (if False, river rows/cols are zero).
+    use_hydraulic_exo : bool
+        If True, use hydraulic resistance (from the full 209x209 matrix) for
+        pump and river connections instead of distance-based assignment.
     """
-    # ── Load pre-computed resistance matrix (piezo-only, ordered by metadata CSV) ──
-    res_file = HYDRAULIC_RESISTANCE_DIR / f'resistance_{resistance_mode}.npy'
+    # ── Load resistance matrix ──
+    res_file = HYDRAULIC_RESISTANCE_DIR / f'resistance_{resistance_source}.npy'
     res_full = np.load(res_file)
 
-    # The notebook built the resistance matrix using piezometer_metadata.csv order.
-    # Re-order rows/cols to match piezo_names (= df_piezo_columns order).
-    meta = pd.read_csv(PIEZO_METADATA)
-    notebook_order = meta['name'].tolist()
+    # Determine matrix format
+    if res_full.shape[0] == num_piezo:
+        # Piezo-only matrix (old GeoTOP format), ordered by metadata CSV
+        meta = pd.read_csv(PIEZO_METADATA)
+        notebook_order = meta['name'].tolist()
+        nb_name_to_idx = {n: i for i, n in enumerate(notebook_order)}
+        reorder = [nb_name_to_idx[n] for n in piezo_names]
+        res_piezo = res_full[np.ix_(reorder, reorder)]
+        res_pump = None
+        res_river = None
+    elif res_full.shape[0] > num_piezo:
+        # Full infrastructure matrix (209x209): piezo + pump + river in pipeline order
+        res_piezo = res_full[:num_piezo, :num_piezo]
+        pump_start = num_piezo
+        river_start = num_piezo + num_pump
+        res_pump = res_full[:num_piezo, pump_start:pump_start + num_pump]
+        res_river = res_full[:num_piezo, river_start:river_start + num_river]
+    else:
+        raise ValueError(f"Unexpected resistance matrix shape {res_full.shape}")
 
-    # Build index mapping: notebook_order position → piezo_names position
-    nb_name_to_idx = {n: i for i, n in enumerate(notebook_order)}
-    reorder = [nb_name_to_idx[n] for n in piezo_names]
-    res = res_full[np.ix_(reorder, reorder)]
-
-    # ── Convert resistance → top-N adjacency ──
-    connectivity = np.where(res > 0, 1.0 / res, 0.0)
+    # ── Piezo-piezo connectivity ──
+    connectivity = np.where(res_piezo > 0, 1.0 / res_piezo, 0.0)
     np.fill_diagonal(connectivity, 0)
 
     piezo_block = np.zeros((num_piezo, num_piezo))
+    pw_min, pw_max = piezo_weight_range
+
     for i in range(num_piezo):
         row = connectivity[i]
-        top_idx = np.argsort(row)[-n_piezo_connected:]
-        top_idx = top_idx[row[top_idx] > 0]  # exclude zeros
-        piezo_block[i, top_idx] = row[top_idx]
+        if sp_min_sensitivity > 0:
+            mask = row >= sp_min_sensitivity
+            if mask.sum() < sp_min_connections:
+                topk = np.argsort(row)[-sp_min_connections:]
+                mask[topk] = True
+            selected = np.where(mask)[0]
+        else:
+            # Top-N mode
+            ranked = np.argsort(row)[-n_piezo_connected:]
+            selected = ranked[row[ranked] > 0]
 
-    # Symmetrize
+        if len(selected) > 0:
+            piezo_block[i, selected] = row[selected]
+
     piezo_block = np.maximum(piezo_block, piezo_block.T)
 
-    # Scale non-zero weights to [weight_min, weight_max]
+    # Scale piezo weights to range
     pos = piezo_block > 0
     if pos.any():
         vals = piezo_block[pos]
-        scaled = weight_min + (vals - vals.min()) / (vals.max() - vals.min() + 1e-10) * (weight_max - weight_min)
+        scaled = pw_min + (vals - vals.min()) / (vals.max() - vals.min() + 1e-10) * (pw_max - pw_min)
         piezo_block[pos] = scaled
 
-    # ── Build full adjacency with exogenous connections ──
+    # ── Build full adjacency ──
     num_nodes = len(all_coords)
     adj_matrix = np.zeros((num_nodes, num_nodes))
     adj_matrix[:num_piezo, :num_piezo] = piezo_block
 
     dist_matrix = pairwise_distances(all_coords)
-    closest_pumps = get_n_closest_pumps_indices(n_pumps_connected, num_piezo)
 
+    # ── Pump connections ──
+    if include_pumps and num_pump > 0:
+        pmp_min, pmp_max = pump_weight_range
+        if use_hydraulic_exo and res_pump is not None:
+            pump_conn = np.where(res_pump > 0, 1.0 / res_pump, 0.0)
+            for i in range(num_piezo):
+                ranked = np.argsort(pump_conn[i])[-n_pumps_connected:]
+                sel = ranked[pump_conn[i, ranked] > 0]
+                if len(sel) > 0:
+                    vals = pump_conn[i, sel]
+                    scaled = pmp_min + (vals - vals.min()) / (vals.max() - vals.min() + 1e-10) * (pmp_max - pmp_min)
+                    adj_matrix[i, num_piezo + sel] = scaled
+        else:
+            closest_pumps = get_n_closest_pumps_indices(n_pumps_connected, num_piezo)
+            for i in range(num_piezo):
+                adj_matrix[i, closest_pumps[i]] = (pmp_min + pmp_max) / 2
+
+    # ── Precipitation connections (always distance-based) ──
     for i in range(num_piezo):
-        # Pumps
-        adj_matrix[i, closest_pumps[i]] = 0.2
-
-        # Closest precipitation
         prec_idx = num_piezo + num_pump + np.argmin(
             dist_matrix[i, num_piezo + num_pump:num_piezo + num_pump + num_prec])
         adj_matrix[i, prec_idx] = 0.3
 
-        # Closest evaporation
+    # ── Evaporation connections (always distance-based) ──
+    for i in range(num_piezo):
         evap_idx = num_piezo + num_pump + num_prec + np.argmin(
             dist_matrix[i, num_piezo + num_pump + num_prec:num_piezo + num_pump + num_prec + num_evap])
         adj_matrix[i, evap_idx] = 0.4
 
-        # Two closest rivers
-        river_indices = np.argsort(dist_matrix[i, -num_river:])[:2] + (num_nodes - num_river)
-        adj_matrix[i, river_indices] = 0.5
+    # ── River connections ──
+    if include_rivers and num_river > 0:
+        riv_min, riv_max = river_weight_range
+        if use_hydraulic_exo and res_river is not None:
+            river_conn = np.where(res_river > 0, 1.0 / res_river, 0.0)
+            for i in range(num_piezo):
+                ranked = np.argsort(river_conn[i])[-n_rivers_connected:]
+                sel = ranked[river_conn[i, ranked] > 0]
+                if len(sel) > 0:
+                    vals = river_conn[i, sel]
+                    scaled = riv_min + (vals - vals.min()) / (vals.max() - vals.min() + 1e-10) * (riv_max - riv_min)
+                    river_offset = num_nodes - num_river
+                    adj_matrix[i, river_offset + sel] = scaled
+        else:
+            river_offset = num_nodes - num_river
+            for i in range(num_piezo):
+                river_dists = dist_matrix[i, river_offset:river_offset + num_river]
+                nearest = np.argsort(river_dists)[:n_rivers_connected]
+                adj_matrix[i, river_offset + nearest] = (riv_min + riv_max) / 2
 
     adj_matrix = np.maximum(adj_matrix, adj_matrix.T)
     return adj_matrix
@@ -938,7 +1021,7 @@ def generate_mixed_optimal_adjacency(rmse_table_path, variant_adj_matrices, num_
     return mixed_adj, best_variant_per_node
 
 
-def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, percentage=None, n_piezo_connected=3, feature_importance_multiplier = None, n_pumps_connected = 4, weight_mode = 'fixed', same_layer = False, directed_graph=False, mean_gw_elevation=None, rf_weight_min=0.08, rf_weight_max=0.2, rf_vim_min=0.01, rf_min_connections=3, rmse_table_path=None, variant_graph_paths=None):
+def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, percentage=None, n_piezo_connected=3, feature_importance_multiplier = None, n_pumps_connected = 4, weight_mode = 'fixed', same_layer = False, directed_graph=False, mean_gw_elevation=None, rf_weight_min=0.08, rf_weight_max=0.2, rf_vim_min=0.01, rf_min_connections=3, rmse_table_path=None, variant_graph_paths=None, sp_config=None):
     # Paths to the metadata files (update these paths according to your folder structure)
 
     metadata_path = PIEZO_METADATA
@@ -1025,14 +1108,24 @@ def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, perce
                   rf_weight_min=rf_weight_min, rf_weight_max=rf_weight_max)
           np.save(GENERATED_GRAPHS / f"{graph_tag}.npy", adj_matrix)
 
-    elif graph_type in ('hydraulic_dijkstra', 'hydraulic_straight'):
-        mode = 'dijkstra' if graph_type == 'hydraulic_dijkstra' else 'straight'
-        adj_matrix = generate_hydraulic_adjacency_matrix(
+    elif graph_type == 'shortest_path':
+        sp = sp_config or {}
+        adj_matrix = generate_shortest_path_adjacency(
             coordinates, df_piezo_columns, num_piezo, num_pump, num_prec,
-            num_evap, num_river, n_piezo_connected=n_piezo_connected,
+            num_evap, num_river,
+            resistance_source=sp.get('resistance_source', 'regis'),
+            n_piezo_connected=n_piezo_connected,
+            sp_min_sensitivity=sp.get('sp_min_sensitivity', 0.0),
+            sp_min_connections=sp.get('sp_min_connections', 3),
+            piezo_weight_range=sp.get('piezo_weight_range', (rf_weight_min, rf_weight_max)),
+            pump_weight_range=sp.get('pump_weight_range', (0.15, 0.25)),
+            river_weight_range=sp.get('river_weight_range', (0.4, 0.6)),
             n_pumps_connected=n_pumps_connected,
-            resistance_mode=mode,
-            weight_min=rf_weight_min, weight_max=rf_weight_max)
+            n_rivers_connected=sp.get('n_rivers_connected', 2),
+            include_pumps=sp.get('include_pumps', True),
+            include_rivers=sp.get('include_rivers', True),
+            use_hydraulic_exo=sp.get('use_hydraulic_exo', False),
+        )
         np.save(GENERATED_GRAPHS / f"{graph_tag}.npy", adj_matrix)
 
     elif graph_type == 'mixed':
