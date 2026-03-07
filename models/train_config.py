@@ -81,8 +81,7 @@ _5R_TAG = 'seed_experiment/5_rivers'
 
 explicit_configs = [
     # ---- 5 rivers: mixed-optimal graph x 8 seeds ----
-    *[{'graph_type': 'mixed', 'seed': s, 'seed_experiment_name': _5R_TAG,
-       'exclude_nodes': _DROP_NODE}
+    *[{'graph_type': 'mixed', 'seed': s, 'seed_experiment_name': _5R_TAG}
       for s in _SEEDS],
 ]
 
