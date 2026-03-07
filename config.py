@@ -52,9 +52,9 @@ RIVER_PATH = INPUT_DIR / "river/river_daily.csv" #validated
 PIEZO_LAYER_INFORMATION = INPUT_DIR / "piezometers/piezometer_layer_information.csv"
 PUMP_DISTANCES = INPUT_DIR / "wells/wellfield_to_obswell_distances.csv"
 if IN_COLAB:
-    HYDRAULIC_RESISTANCE_DIR = Path("/content/drive/MyDrive/Dutch Hydrogeologic Data/EDA/Overbertuwe")
+    HYDRAULIC_RESISTANCE_DIR = DRIVE_OUTPUT / "data" / "Shortest_Path_Graphs"
 else:
-    HYDRAULIC_RESISTANCE_DIR = Path(r"G:\My Drive\Dutch Hydrogeologic Data\EDA\Overbertuwe")
+    HYDRAULIC_RESISTANCE_DIR = BASE_PATH / "data" / "Shortest_Path_Graphs"
 RANDOM_FOREST_TRAINING_DATA = INPUT_DIR / "piezo_only_rf_training_data.csv"
 
 #Pickl files for RF Training Importances
