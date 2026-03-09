@@ -4,7 +4,7 @@ from pathlib import Path
 import os
 
 # Automatically detect if running in Colab
-IN_COLAB = "COLAB_GPU" in os.environ
+IN_COLAB = "COLAB_RELEASE_TAG" in os.environ or "COLAB_GPU" in os.environ
 # BASE_PATH always resolves to the project root (where this config.py lives)
 BASE_PATH = Path(__file__).resolve().parent
 
@@ -53,8 +53,10 @@ PIEZO_LAYER_INFORMATION = INPUT_DIR / "piezometers/piezometer_layer_information.
 PUMP_DISTANCES = INPUT_DIR / "wells/wellfield_to_obswell_distances.csv"
 if IN_COLAB:
     HYDRAULIC_RESISTANCE_DIR = DRIVE_OUTPUT / "data" / "Shortest_Path_Graphs"
+    REGIS_DIR = DRIVE_OUTPUT / "data" / "REGIS II Study Area Raster Data"
 else:
-    HYDRAULIC_RESISTANCE_DIR = BASE_PATH / "data" / "Shortest_Path_Graphs"
+    HYDRAULIC_RESISTANCE_DIR = BASE_PATH.parent / "data" / "Shortest_Path_Graphs"
+    REGIS_DIR = BASE_PATH.parent / "data" / "REGIS II Study Area Raster Data"
 RANDOM_FOREST_TRAINING_DATA = INPUT_DIR / "piezo_only_rf_training_data.csv"
 
 #Pickl files for RF Training Importances
@@ -67,4 +69,6 @@ STATIC_FEATURES_PATH = PREPROCESSED_DIR / "static_features.pt"
 PROCESSED_DATA_FILE = PREPROCESSED_DIR / "processed_data.pkl"
 COLUMN_NAMES_REAL = PREPROCESSED_DIR / "column_names_real.txt"
 COLUMN_NAMES_SYN = PREPROCESSED_DIR / "column_names_synthetic.txt"
+NODE_K_VALUES = PREPROCESSED_DIR / "node_k_values.csv"
+FEATURE_DISTANCE_7D = PREPROCESSED_DIR / "feature_distance_7d.npy"
 

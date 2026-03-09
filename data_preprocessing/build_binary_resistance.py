@@ -30,19 +30,13 @@ from scipy.sparse.csgraph import dijkstra
 # Add parent to path so config imports work
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from config import (
-    INPUT_DIR, PREPROCESSED_DIR, HYDRAULIC_RESISTANCE_DIR,
+    INPUT_DIR, PREPROCESSED_DIR, HYDRAULIC_RESISTANCE_DIR, REGIS_DIR,
     PIEZO_METADATA, PUMP_METADATA, RIVER_METADATA
 )
 
 # Fixed K values for binary classification
 K_AQUIFER = 10.0      # m/d — typical sandy aquifer
 K_AQUITARD = 0.001    # m/d — typical clay aquitard
-
-# REGIS II raster directory
-REGIS_DIR = Path(__file__).resolve().parent.parent / "data" / "REGIS II Study Area Raster Data"
-if not REGIS_DIR.exists():
-    # Try Drive path
-    REGIS_DIR = Path(r"G:\My Drive\Environmental_DL_Project\GroundwaterFlowGNN-v2-3hourly\data\REGIS II Study Area Raster Data")
 
 
 def read_regis_raster(fpath):

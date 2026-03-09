@@ -502,6 +502,116 @@ def generate_rf_adjacency_fixed(
     adj_matrix = np.maximum(adj_matrix, adj_matrix.T)
     return adj_matrix
 
+
+def generate_rf_cutoff_adjacency(
+    all_coords: np.ndarray,
+    num_piezo: int,
+    num_pump: int,
+    num_prec: int,
+    num_evap: int,
+    num_river: int,
+    rf_config: dict,
+) -> np.ndarray:
+    """
+    RF adjacency with importance-threshold cutoff.
+
+    Piezo-piezo edges are determined by RF importance (from RF_TRAINED_ALL)
+    with a cutoff threshold and minimum-connections guarantee.
+    Pump and river connections use spatial distance (the RF matrix may have
+    been trained with a different node count, and RF pump/river importances
+    are negligible at medium-to-sparse cutoffs).
+    Precip/evap use fixed weights (0.3 / 0.4) via spatial distance.
+
+    Parameters
+    ----------
+    all_coords : ndarray (N, 2)
+        XY coordinates for all N nodes.
+    num_piezo, num_pump, num_prec, num_evap, num_river : int
+        Node counts by type.
+    rf_config : dict
+        'cutoff'          : float  – min RF importance to create an edge
+        'min_connections' : int    – guaranteed min piezo-piezo connections (default 3)
+        'n_pumps_connected' : int  – number of closest pumps per piezo (default 4)
+        'n_rivers_connected': int  – number of closest rivers per piezo (default 2)
+        'pump_weight'     : float  – weight for pump edges (default 1.0)
+        'river_weight'    : float  – weight for river edges (default 1.0)
+    """
+    cutoff = rf_config['cutoff']
+    min_connections = rf_config.get('min_connections', 3)
+    n_pumps_connected = rf_config.get('n_pumps_connected', 4)
+    n_rivers_connected = rf_config.get('n_rivers_connected', 2)
+    pump_weight = rf_config.get('pump_weight', 1.0)
+    river_weight = rf_config.get('river_weight', 1.0)
+    num_nodes = len(all_coords)
+
+    # ── 1. Load RF importance matrix (piezo-only block) ──
+    raw_rf = joblib.load(RF_TRAINED_ALL)
+    if isinstance(raw_rf, pd.DataFrame):
+        rf_full = raw_rf.values.astype(float)
+    elif isinstance(raw_rf, np.ndarray):
+        rf_full = raw_rf.astype(float)
+    else:
+        rf_full = np.array(raw_rf, dtype=float)
+
+    print(f"  RF importance matrix shape: {rf_full.shape}")
+
+    adj = np.zeros((num_nodes, num_nodes), dtype=float)
+
+    # ── 2. Piezo-piezo connections (cutoff + min_connections guarantee) ──
+    piezo_conn_counts = []
+    for i in range(num_piezo):
+        row = rf_full[i, :num_piezo].copy()
+        row[i] = 0  # no self-loops
+        mask = row >= cutoff
+        if mask.sum() < min_connections:
+            topk = np.argsort(row)[-min_connections:]
+            mask[topk] = True
+        adj[i, np.where(mask)[0]] = 1.0
+        piezo_conn_counts.append(int(mask.sum()))
+
+    # ── 3. Pump connections (spatial distance) ──
+    closest_pumps = get_n_closest_pumps_indices(
+        n_pumps_connected, num_piezo, pump_distances_file=PUMP_DISTANCES
+    )
+    for i in range(num_piezo):
+        adj[i, closest_pumps[i]] = pump_weight
+
+    # ── 4. River connections (spatial distance, N closest) ──
+    dist_matrix = pairwise_distances(all_coords)
+    river_adj_start = num_nodes - num_river
+    if num_river > 0:
+        for i in range(num_piezo):
+            riv_dists = dist_matrix[i, river_adj_start:river_adj_start + num_river]
+            nearest = np.argsort(riv_dists)[:n_rivers_connected] + river_adj_start
+            adj[i, nearest] = river_weight
+
+    # ── 5. Precipitation and evaporation (fixed weights, spatial distance) ──
+    prec_start = num_piezo + num_pump
+    evap_start = prec_start + num_prec
+    for i in range(num_piezo):
+        if num_prec > 0:
+            prec_idx = prec_start + np.argmin(dist_matrix[i, prec_start:prec_start + num_prec])
+            adj[i, prec_idx] = 0.3
+        if num_evap > 0:
+            evap_idx = evap_start + np.argmin(dist_matrix[i, evap_start:evap_start + num_evap])
+            adj[i, evap_idx] = 0.4
+
+    # ── 6. Symmetrise ──
+    adj = np.maximum(adj, adj.T)
+
+    # ── 7. Stats ──
+    piezo_edges = np.count_nonzero(adj[:num_piezo, :num_piezo]) // 2
+    edges_per_node = np.count_nonzero(adj[:num_piezo, :num_piezo], axis=1)
+    total_edges = np.count_nonzero(adj) // 2
+    print(f"  RF-cutoff graph (cutoff={cutoff}, min_conn={min_connections}):")
+    print(f"    Piezo-piezo edges: {piezo_edges}")
+    print(f"    Edges/piezo: min={edges_per_node.min()}, mean={edges_per_node.mean():.1f}, max={edges_per_node.max()}")
+    print(f"    Pump edges/piezo: {n_pumps_connected} (spatial, weight={pump_weight})")
+    print(f"    River edges/piezo: {min(n_rivers_connected, num_river)} (spatial, weight={river_weight})")
+    print(f"    Total edges (inc. exo): {total_edges}")
+
+    return adj
+
 def generate_rf_adjacency_variable(
         piezo_columns: list,
         all_coords: np.ndarray,
@@ -960,6 +1070,123 @@ def generate_shortest_path_adjacency(
     return adj_matrix
 
 
+def generate_feature_distance_adjacency(
+    all_coords, num_piezo, num_pump, num_prec, num_evap, num_river, fd_config,
+):
+    """
+    Build adjacency matrix from a pre-computed 7-D feature-distance matrix
+    (Liang et al. 2025).
+
+    Loads the 209×209 distance matrix produced by extract_node_k_values.py,
+    applies a radius cutoff, and sets edge weights = 1/distance.
+    Precip/evap nodes get standard fixed weights.
+
+    Parameters
+    ----------
+    all_coords : ndarray (N, 2)
+        XY coordinates for all nodes (for precip/evap assignment).
+    num_piezo, num_pump, num_prec, num_evap, num_river : int
+        Node counts by type.
+    fd_config : dict
+        Must contain 'radius'; optional 'min_connections' (default 3).
+        Optional 'pump_weight' (default 1.0), 'river_weight' (default 1.0).
+        Optional 'weight_max' (default None = binary 1.0).
+            When set, edge weights are scaled by inverse distance:
+            w = weight_max * (1 - dist/radius), clamped to [0.01*weight_max, weight_max].
+    """
+    from config import FEATURE_DISTANCE_7D
+
+    radius = fd_config['radius']
+    min_connections = fd_config.get('min_connections', 3)
+    pump_weight = fd_config.get('pump_weight', 1.0)
+    river_weight = fd_config.get('river_weight', 1.0)
+    weight_max = fd_config.get('weight_max', None)  # None = binary 1.0
+    num_nodes = len(all_coords)
+
+    # ── 1. Load pre-computed 7-D distance matrix (209×209) ──
+    dist_7d = np.load(FEATURE_DISTANCE_7D)
+    n_subsurface = dist_7d.shape[0]  # piezo + pump + river = 209
+
+    # ── 2. Build subsurface adjacency block ──
+    sub_adj = np.zeros((n_subsurface, n_subsurface))
+
+    for i in range(n_subsurface):
+        dists = dist_7d[i].copy()
+        dists[i] = np.inf  # exclude self
+
+        # Nodes within radius
+        within_radius = np.where(dists <= radius)[0]
+
+        if len(within_radius) < min_connections:
+            # Guarantee minimum connections: pick closest N
+            closest = np.argsort(dists)[:min_connections]
+            within_radius = closest
+
+        if weight_max is not None:
+            # Distance-scaled weights: linear decay from weight_max at dist=0
+            # to ~0 at dist=radius; forced connections beyond radius get floor
+            floor = 0.01 * weight_max
+            weights = weight_max * (1.0 - dists[within_radius] / radius)
+            weights = np.clip(weights, floor, weight_max)
+            sub_adj[i, within_radius] = weights
+        else:
+            sub_adj[i, within_radius] = 1.0  # unweighted (Liang et al. 2025)
+
+    # Symmetrise
+    sub_adj = np.maximum(sub_adj, sub_adj.T)
+
+    # ── 3. Map subsurface block into full adjacency matrix ──
+    # Subsurface order: piezo(0..P-1), pump(P..P+Pu-1), river(P+Pu..P+Pu+R-1)
+    # Full adj order:   piezo(0..P-1), pump(P..P+Pu-1), prec, evap, river(N-R..N-1)
+    adj_matrix = np.zeros((num_nodes, num_nodes))
+
+    pump_sub_start = num_piezo
+    pump_sub_end = num_piezo + num_pump
+    river_sub_start = num_piezo + num_pump
+    river_adj_start = num_nodes - num_river
+
+    # Piezo-piezo
+    adj_matrix[:num_piezo, :num_piezo] = sub_adj[:num_piezo, :num_piezo]
+
+    # Piezo-pump (scaled by pump_weight)
+    adj_matrix[:num_piezo, num_piezo:num_piezo + num_pump] = sub_adj[:num_piezo, pump_sub_start:pump_sub_end] * pump_weight
+    adj_matrix[num_piezo:num_piezo + num_pump, :num_piezo] = sub_adj[pump_sub_start:pump_sub_end, :num_piezo] * pump_weight
+
+    # Piezo-river (scaled by river_weight)
+    adj_matrix[:num_piezo, river_adj_start:] = sub_adj[:num_piezo, river_sub_start:] * river_weight
+    adj_matrix[river_adj_start:, :num_piezo] = sub_adj[river_sub_start:, :num_piezo] * river_weight
+
+    # Pump-pump, pump-river, river-river
+    adj_matrix[num_piezo:num_piezo + num_pump, num_piezo:num_piezo + num_pump] = sub_adj[pump_sub_start:pump_sub_end, pump_sub_start:pump_sub_end] * pump_weight
+    adj_matrix[num_piezo:num_piezo + num_pump, river_adj_start:] = sub_adj[pump_sub_start:pump_sub_end, river_sub_start:] * max(pump_weight, river_weight)
+    adj_matrix[river_adj_start:, num_piezo:num_piezo + num_pump] = sub_adj[river_sub_start:, pump_sub_start:pump_sub_end] * max(pump_weight, river_weight)
+    adj_matrix[river_adj_start:, river_adj_start:] = sub_adj[river_sub_start:, river_sub_start:] * river_weight
+
+    # ── 4. Precipitation and evaporation connections (distance-based, fixed weights) ──
+    dist_matrix = pairwise_distances(all_coords)
+    for i in range(num_piezo):
+        prec_idx = num_piezo + num_pump + np.argmin(
+            dist_matrix[i, num_piezo + num_pump:num_piezo + num_pump + num_prec])
+        adj_matrix[i, prec_idx] = 0.3
+
+        evap_idx = num_piezo + num_pump + num_prec + np.argmin(
+            dist_matrix[i, num_piezo + num_pump + num_prec:num_piezo + num_pump + num_prec + num_evap])
+        adj_matrix[i, evap_idx] = 0.4
+
+    adj_matrix = np.maximum(adj_matrix, adj_matrix.T)
+
+    # ── 5. Print stats ──
+    piezo_edges = np.count_nonzero(adj_matrix[:num_piezo, :num_piezo]) // 2
+    edges_per_node = np.count_nonzero(adj_matrix[:num_piezo, :num_piezo], axis=1)
+    total_edges = np.count_nonzero(adj_matrix) // 2
+    print(f"  Feature-distance graph (radius={radius}):")
+    print(f"    Piezo-piezo edges: {piezo_edges}")
+    print(f"    Edges/piezo: min={edges_per_node.min()}, mean={edges_per_node.mean():.1f}, max={edges_per_node.max()}")
+    print(f"    Total edges (inc. exo): {total_edges}")
+
+    return adj_matrix
+
+
 def generate_mixed_optimal_adjacency(rmse_table_path, variant_adj_matrices, num_piezo,
                                      fallback_variant='default'):
     """Build a mixed adjacency matrix by selecting each piezometer node's row
@@ -1021,7 +1248,7 @@ def generate_mixed_optimal_adjacency(rmse_table_path, variant_adj_matrices, num_
     return mixed_adj, best_variant_per_node
 
 
-def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, percentage=None, n_piezo_connected=3, feature_importance_multiplier = None, n_pumps_connected = 4, weight_mode = 'fixed', same_layer = False, directed_graph=False, mean_gw_elevation=None, rf_weight_min=0.08, rf_weight_max=0.2, rf_vim_min=0.01, rf_min_connections=3, rmse_table_path=None, variant_graph_paths=None, sp_config=None):
+def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, percentage=None, n_piezo_connected=3, feature_importance_multiplier = None, n_pumps_connected = 4, weight_mode = 'fixed', same_layer = False, directed_graph=False, mean_gw_elevation=None, rf_weight_min=0.08, rf_weight_max=0.2, rf_vim_min=0.01, rf_min_connections=3, rmse_table_path=None, variant_graph_paths=None, sp_config=None, fd_config=None, rf_config=None):
     # Paths to the metadata files (update these paths according to your folder structure)
 
     metadata_path = PIEZO_METADATA
@@ -1106,6 +1333,11 @@ def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, perce
                   n_pumps_connected=n_pumps_connected,
                   feature_importance_multiplier=feature_importance_multiplier,
                   rf_weight_min=rf_weight_min, rf_weight_max=rf_weight_max)
+          elif weight_mode == 'cutoff':
+              rc = rf_config or {}
+              adj_matrix = generate_rf_cutoff_adjacency(
+                  coordinates, num_piezo, num_pump, num_prec,
+                  num_evap, num_river, rc)
           np.save(GENERATED_GRAPHS / f"{graph_tag}.npy", adj_matrix)
 
     elif graph_type == 'shortest_path':
@@ -1125,6 +1357,13 @@ def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, perce
             include_pumps=sp.get('include_pumps', True),
             include_rivers=sp.get('include_rivers', True),
             use_hydraulic_exo=sp.get('use_hydraulic_exo', False),
+        )
+        np.save(GENERATED_GRAPHS / f"{graph_tag}.npy", adj_matrix)
+
+    elif graph_type == 'feature_distance':
+        fd = fd_config or {}
+        adj_matrix = generate_feature_distance_adjacency(
+            coordinates, num_piezo, num_pump, num_prec, num_evap, num_river, fd,
         )
         np.save(GENERATED_GRAPHS / f"{graph_tag}.npy", adj_matrix)
 

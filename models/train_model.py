@@ -467,14 +467,15 @@ def generate_configurations():
         configs = []
         for overrides in explicit_configs:
             cfg = base_config.copy()
-            # Deep-merge sp_config so partial overrides inherit defaults
-            if 'sp_config' in overrides and 'sp_config' in cfg:
-                merged_sp = cfg['sp_config'].copy()
-                merged_sp.update(overrides['sp_config'])
-                cfg.update(overrides)
-                cfg['sp_config'] = merged_sp
-            else:
-                cfg.update(overrides)
+            # Deep-merge nested config dicts so partial overrides inherit defaults
+            merged_nested = {}
+            for nested_key in ('sp_config', 'fd_config', 'rf_config'):
+                if nested_key in overrides and nested_key in cfg:
+                    merged = cfg[nested_key].copy()
+                    merged.update(overrides[nested_key])
+                    merged_nested[nested_key] = merged
+            cfg.update(overrides)
+            cfg.update(merged_nested)
             configs.append(cfg)
         return configs
 
@@ -840,7 +841,27 @@ def run_training_and_evaluation(config):
         seed_folder = config['seed_experiment_name']
         gt_label = config['graph_type']
         if gt_label == 'shortest_path' and config.get('sp_config'):
-            gt_label += '_' + config['sp_config'].get('resistance_source', 'regis')
+            sp = config['sp_config']
+            gt_label += '_' + sp.get('resistance_source', 'regis')
+            sens = sp.get('sp_min_sensitivity', 0.0)
+            if sens > 0:
+                gt_label += f'_s{sens}'
+            if sp.get('use_hydraulic_exo'):
+                gt_label += '_hexo'
+        elif gt_label == 'feature_distance' and config.get('fd_config'):
+            fd = config['fd_config']
+            r = fd.get('radius', 0.25)
+            gt_label += f'_r{r:.2f}'.replace('.', '')
+            if fd.get('weight_max') is not None:
+                gt_label += f'_wm{fd["weight_max"]}'.replace('.', '')
+            if fd.get('pump_weight', 1.0) != 1.0 or fd.get('river_weight', 1.0) != 1.0:
+                gt_label += '_taccari'
+        elif gt_label == 'rf' and config.get('weight_mode') == 'cutoff' and config.get('rf_config'):
+            rc = config['rf_config']
+            c = rc.get('cutoff', 0.01)
+            gt_label += f'_cutoff_{c}'.replace('.', '')
+            if rc.get('pump_weight', 1.0) != 1.0 or rc.get('river_weight', 1.0) != 1.0:
+                gt_label += '_taccari'
         if config.get('multi_support'):
             gt_label += '_multi_support'
         run_dir = OUTPUTS_DIR / seed_folder / gt_label / model_base
@@ -947,7 +968,7 @@ def run_training_and_evaluation(config):
             rmse_table_path=rmse_table_path,
             variant_graph_paths=variant_adj)
     else:
-        A_tilde, static_features = gnn_data_prep.main(df_piezo_columns, pump_columns, locations_no_missing, config['graph_type'], config['percentage'] , config['n_piezo_connected'], config['feature_importance_multiplier'], config['n_pumps_connected'], config['weight_mode'], config['layer_constrain'], directed_graph=config.get('directed_graph', False), mean_gw_elevation=mean_gw_elevation, rf_weight_min=config.get('rf_weight_min', 0.08), rf_weight_max=config.get('rf_weight_max', 0.2), rf_vim_min=config.get('rf_vim_min', 0.01), rf_min_connections=config.get('rf_min_connections', 3), sp_config=config.get('sp_config'))
+        A_tilde, static_features = gnn_data_prep.main(df_piezo_columns, pump_columns, locations_no_missing, config['graph_type'], config['percentage'] , config['n_piezo_connected'], config['feature_importance_multiplier'], config['n_pumps_connected'], config['weight_mode'], config['layer_constrain'], directed_graph=config.get('directed_graph', False), mean_gw_elevation=mean_gw_elevation, rf_weight_min=config.get('rf_weight_min', 0.08), rf_weight_max=config.get('rf_weight_max', 0.2), rf_vim_min=config.get('rf_vim_min', 0.01), rf_min_connections=config.get('rf_min_connections', 3), sp_config=config.get('sp_config'), fd_config=config.get('fd_config'), rf_config=config.get('rf_config'))
 
     heatmap_title = (f"{config.get('model_type', 'MTGNN')} | graph={config['graph_type']} | "
                      f"weight_mode={config['weight_mode']}<br>"

@@ -85,6 +85,20 @@ def define_base_configuration():
             'include_rivers': True,
             'use_hydraulic_exo': False,      # True = use resistance for pump/river weights
         },
+
+        # Feature-distance graph (graph_type='feature_distance') — Liang et al. 2025
+        # 7-D feature-space distance: [X, Y, Z, log10(Kh), log10(Kh), log10(Kv), h]
+        'fd_config': {
+            'radius': 0.25,            # max distance in normalised feature space for edge creation
+            'min_connections': 3,      # guaranteed minimum connections per node
+        },
+
+        # RF cutoff graph (graph_type='rf', weight_mode='cutoff')
+        # Uses full RF importance matrix (incl. pumps & rivers) with threshold cutoff
+        'rf_config': {
+            'cutoff': 0.01,            # min RF importance to create an edge
+            'min_connections': 3,      # guaranteed minimum piezo-piezo connections
+        },
     }
 
 # --------------------------------------------------------------------------
@@ -96,37 +110,31 @@ _SEEDS = [42, 123, 256, 512, 777, 1024, 2048, 3141]
 _5R_TAG = 'seed_experiment/5_rivers'
 
 explicit_configs = [
-    # ---- 5 rivers: multi-support (static + adaptive) x 3 graph types x 8 seeds ----
-    *[{'graph_type': 'default', 'multi_support': True,
-       'adaptive_graph_type': 'default',
+    # ---- Feature-distance (Liang et al. 2025) — radius sweep (3 seeds for initial comparison) ----
+    *[{'graph_type': 'feature_distance',
+       'fd_config': {'radius': r},
        'seed': s, 'seed_experiment_name': _5R_TAG}
-      for s in _SEEDS],
-    *[{'graph_type': 'geolayer', 'multi_support': True,
-       'adaptive_graph_type': 'geolayer',
+      for r in (0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.50)
+      for s in _SEEDS[:3]],
+    # ---- RF cutoff — medium-to-sparse, 8 seeds for robust comparison ----
+    *[{'graph_type': 'rf', 'weight_mode': 'cutoff',
+       'rf_config': {'cutoff': c},
        'seed': s, 'seed_experiment_name': _5R_TAG}
+      for c in (0.02, 0.03, 0.05)
       for s in _SEEDS],
-    *[{'graph_type': 'rf', 'weight_mode': 'fixed', 'multi_support': True,
-       'adaptive_graph_type': 'rf', 'adaptive_weight_mode': 'fixed',
+    # ---- Feature-distance + Taccari weights (pump×2, river×5) — select radii ----
+    *[{'graph_type': 'feature_distance',
+       'fd_config': {'radius': r, 'pump_weight': 2.0, 'river_weight': 5.0},
        'seed': s, 'seed_experiment_name': _5R_TAG}
-      for s in _SEEDS],
-    # ---- 5 rivers: RF full VIM (threshold-based, min 3 connections) x 4 thresholds x 8 seeds ----
-    *[{'graph_type': 'rf', 'weight_mode': 'full', 'rf_vim_min': vim,
-       'rf_min_connections': 3,
+      for r in (0.15, 0.20, 0.25, 0.30, 0.40)
+      for s in _SEEDS[:3]],
+    # ---- Feature-distance with distance-scaled weights — select radii ----
+    *[{'graph_type': 'feature_distance',
+       'fd_config': {'radius': r, 'weight_max': wm},
        'seed': s, 'seed_experiment_name': _5R_TAG}
-      for vim in [0.01, 0.02, 0.05, 0.1]
-      for s in _SEEDS],
-    # ---- 5 rivers: shortest-path REGIS II (full K) x 8 seeds ----
-    # Requires: resistance_regis.npy in HYDRAULIC_RESISTANCE_DIR
-    *[{'graph_type': 'shortest_path',
-       'sp_config': {'resistance_source': 'regis'},
-       'seed': s, 'seed_experiment_name': _5R_TAG}
-      for s in _SEEDS],
-    # ---- 5 rivers: shortest-path binary (aquitard/aquifer) x 8 seeds ----
-    # Requires: resistance_binary.npy in HYDRAULIC_RESISTANCE_DIR
-    *[{'graph_type': 'shortest_path',
-       'sp_config': {'resistance_source': 'binary'},
-       'seed': s, 'seed_experiment_name': _5R_TAG}
-      for s in _SEEDS],
+      for wm in (1.0, 0.5, 0.2)
+      for r in (0.15, 0.20, 0.25, 0.30, 0.40)
+      for s in _SEEDS[:3]],
 ]
 
 # Previous config (kept for reference):

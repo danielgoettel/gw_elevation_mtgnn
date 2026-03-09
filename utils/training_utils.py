@@ -152,6 +152,40 @@ def generate_model_filename(model_type, future_window, graph_type=None, **kwargs
         wmax = kwargs.get('rf_weight_max', 0.2)
         base_name += f"_RFW:{wmin}-{wmax}"
 
+    sp = kwargs.get('sp_config')
+    if sp and graph_type == 'shortest_path':
+        base_name += f"_{sp.get('resistance_source', 'regis')}"
+        sens = sp.get('sp_min_sensitivity', 0.0)
+        if sens > 0:
+            base_name += f"_s{sens}"
+        mc = sp.get('sp_min_connections', 3)
+        if mc != 3:
+            base_name += f"_mc{mc}"
+        if sp.get('use_hydraulic_exo'):
+            base_name += "_hexo"
+
+    fd = kwargs.get('fd_config')
+    if fd and graph_type == 'feature_distance':
+        r = fd.get('radius', 0.25)
+        base_name += f"_r{r:.2f}".replace('.', '')
+        mc = fd.get('min_connections', 3)
+        if mc != 3:
+            base_name += f"_mc{mc}"
+        if fd.get('weight_max') is not None:
+            base_name += f"_wm{fd['weight_max']}".replace('.', '')
+        if fd.get('pump_weight', 1.0) != 1.0 or fd.get('river_weight', 1.0) != 1.0:
+            base_name += f"_pw{fd.get('pump_weight', 1.0)}_rw{fd.get('river_weight', 1.0)}".replace('.', '')
+
+    rc = kwargs.get('rf_config')
+    if rc and graph_type == 'rf' and kwargs.get('weight_mode') == 'cutoff':
+        c = rc.get('cutoff', 0.01)
+        base_name += f"_c{c}".replace('.', '')
+        mc = rc.get('min_connections', 3)
+        if mc != 3:
+            base_name += f"_mc{mc}"
+        if rc.get('pump_weight', 1.0) != 1.0 or rc.get('river_weight', 1.0) != 1.0:
+            base_name += f"_pw{rc.get('pump_weight', 1.0)}_rw{rc.get('river_weight', 1.0)}".replace('.', '')
+
     if not kwargs.get('gcn_true', True):
         base_name += "_noAdaptive"
 
