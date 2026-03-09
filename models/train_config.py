@@ -116,12 +116,12 @@ explicit_configs = [
        'seed': s, 'seed_experiment_name': _5R_TAG}
       for r in (0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.50)
       for s in _SEEDS[:3]],
-    # ---- RF cutoff — medium-to-sparse, 8 seeds for robust comparison ----
+    # ---- RF cutoff — medium-to-sparse, 3 seeds for initial comparison ----
     *[{'graph_type': 'rf', 'weight_mode': 'cutoff',
        'rf_config': {'cutoff': c},
        'seed': s, 'seed_experiment_name': _5R_TAG}
       for c in (0.02, 0.03, 0.05)
-      for s in _SEEDS],
+      for s in _SEEDS[:3]],
     # ---- Feature-distance + Taccari weights (pump×2, river×5) — select radii ----
     *[{'graph_type': 'feature_distance',
        'fd_config': {'radius': r, 'pump_weight': 2.0, 'river_weight': 5.0},
