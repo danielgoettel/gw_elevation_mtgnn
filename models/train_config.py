@@ -110,30 +110,16 @@ _SEEDS = [42, 123, 256, 512, 777, 1024, 2048, 3141]
 _5R_TAG = 'seed_experiment/5_rivers'
 
 explicit_configs = [
-    # ---- Feature-distance (Liang et al. 2025) — radius sweep (3 seeds for initial comparison) ----
+    # ---- Feature-distance r=0.10 — remaining 5 seeds (42, 123, 256 already done) ----
+    *[{'graph_type': 'feature_distance',
+       'fd_config': {'radius': 0.10},
+       'seed': s, 'seed_experiment_name': _5R_TAG}
+      for s in _SEEDS[3:]],
+    # ---- Feature-distance r=0.05, 0.08, 0.12 — 3 seeds each ----
     *[{'graph_type': 'feature_distance',
        'fd_config': {'radius': r},
        'seed': s, 'seed_experiment_name': _5R_TAG}
-      for r in (0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.50)
-      for s in _SEEDS[:3]],
-    # ---- RF cutoff — medium-to-sparse, 3 seeds for initial comparison ----
-    *[{'graph_type': 'rf', 'weight_mode': 'cutoff',
-       'rf_config': {'cutoff': c},
-       'seed': s, 'seed_experiment_name': _5R_TAG}
-      for c in (0.02, 0.03, 0.05)
-      for s in _SEEDS[:3]],
-    # ---- Feature-distance + Taccari weights (pump×2, river×5) — select radii ----
-    *[{'graph_type': 'feature_distance',
-       'fd_config': {'radius': r, 'pump_weight': 2.0, 'river_weight': 5.0},
-       'seed': s, 'seed_experiment_name': _5R_TAG}
-      for r in (0.15, 0.20, 0.25, 0.30, 0.40)
-      for s in _SEEDS[:3]],
-    # ---- Feature-distance with distance-scaled weights — select radii ----
-    *[{'graph_type': 'feature_distance',
-       'fd_config': {'radius': r, 'weight_max': wm},
-       'seed': s, 'seed_experiment_name': _5R_TAG}
-      for wm in (1.0, 0.5, 0.2)
-      for r in (0.15, 0.20, 0.25, 0.30, 0.40)
+      for r in (0.05, 0.08, 0.12)
       for s in _SEEDS[:3]],
 ]
 
