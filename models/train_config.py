@@ -112,17 +112,6 @@ _5R_TAG = 'seed_experiment/5_rivers'
 _DO_TAG = 'seed_experiment/5_rivers'  # same output folder, dropout suffix in filename
 
 explicit_configs = [
-    # ---- Feature-distance r=0.10 — remaining 5 seeds (42, 123, 256 already done) ----
-    *[{'graph_type': 'feature_distance',
-       'fd_config': {'radius': 0.10},
-       'seed': s, 'seed_experiment_name': _5R_TAG}
-      for s in _SEEDS[3:]],
-    # ---- Feature-distance r=0.05, 0.08, 0.12 — 3 seeds each ----
-    *[{'graph_type': 'feature_distance',
-       'fd_config': {'radius': r},
-       'seed': s, 'seed_experiment_name': _5R_TAG}
-      for r in (0.05, 0.08, 0.12)
-      for s in _SEEDS[:3]],
     # ══════════════════════════════════════════════════════════════════
     # Node-dropout runs — best config per graph type × 8 seeds
     # ══════════════════════════════════════════════════════════════════
