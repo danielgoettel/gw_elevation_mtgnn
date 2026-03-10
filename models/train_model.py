@@ -902,6 +902,7 @@ def run_training_and_evaluation(config):
         config['synthetic_data'],
         resampling_freq=config.get('resampling_freq', 'W')
     )
+    RANDOM_FOREST_TRAINING_DATA.parent.mkdir(parents=True, exist_ok=True)
     train_data.to_csv(RANDOM_FOREST_TRAINING_DATA)
 
     # ── Temp fix: exclude specific nodes before graph construction ──
