@@ -692,12 +692,9 @@ def main(run_all=True):
             df_row = pd.DataFrame([row])
             if overall_path.exists():
                 try:
-                    from openpyxl import load_workbook
-                    wb = load_workbook(str(overall_path))
-                    ws = wb.active
-                    for r in df_row.itertuples(index=False):
-                        ws.append(list(r))
-                    wb.save(str(overall_path))
+                    existing = pd.read_excel(overall_path)
+                    combined = pd.concat([existing, df_row], ignore_index=True)
+                    combined.to_excel(overall_path, index=False)
                 except Exception as e:
                     print(f"⚠ Could not append to {overall_path} ({e}). Backing up and creating new file.")
                     backup = overall_path.with_suffix('.xlsx.bak')
