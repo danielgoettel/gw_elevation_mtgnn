@@ -518,7 +518,7 @@ def main(run_all=True):
         else:
             print(f"Running base configuration {i} of {total_runs}")
         
-        step_results, dropped_node_names = run_training_and_evaluation(config)
+        step_results, dropped_node_names, model_base = run_training_and_evaluation(config)
 
         # Write best F_w step (lowest RMSE) to per-node results table
         if step_results:
@@ -1075,7 +1075,7 @@ def run_training_and_evaluation(config):
             dropped_node_names, F_w)
         step_results.append((F_w, rmse_mean, rmse_std, geo_summary, per_node_rmse, piezo_cols))
 
-    return step_results, dropped_node_names
+    return step_results, dropped_node_names, model_base
 
 if __name__ == "__main__":
     main(run_all=False) # for running only the base configuration

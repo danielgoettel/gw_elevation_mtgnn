@@ -15,7 +15,7 @@ from pathlib import Path
 import pandas as pd
 from openpyxl import load_workbook
 
-OUTPUTS_DIR = Path(__file__).parent.parent / "outputs_Independent_Study"
+OUTPUTS_DIR = Path(__file__).parent.parent.parent / "outputs_Independent_Study"
 
 NEW_SEED_COLS = ["Variant", "FD Radius", "FD Weight Max", "FD Pump Weight",
                  "FD River Weight", "RF Cutoff", "RF Min Conn"]
