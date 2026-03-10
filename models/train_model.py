@@ -524,11 +524,20 @@ def main(run_all=True):
         if step_results:
             best_idx = min(range(len(step_results)), key=lambda k: step_results[k][1])
             best_fw, best_rmse_mean, _, _, best_per_node, best_piezo_cols = step_results[best_idx]
+            _fd = config.get('fd_config') or {}
+            _rc = config.get('rf_config') or {}
             node_row = {
                 "Timestamp":            datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+                "Variant":              model_base,
                 "Graph Type":           config["graph_type"],
                 "Weight Mode":          config['weight_mode'],
                 "RF Weight Range":      f"{config.get('rf_weight_min', '')}-{config.get('rf_weight_max', '')}" if config['weight_mode'] in ('variable', 'full') else "",
+                "FD Radius":            _fd.get('radius', ''),
+                "FD Weight Max":        _fd.get('weight_max', ''),
+                "FD Pump Weight":       _fd.get('pump_weight', ''),
+                "FD River Weight":      _fd.get('river_weight', ''),
+                "RF Cutoff":            _rc.get('cutoff', ''),
+                "RF Min Conn":          _rc.get('min_connections', ''),
                 "Multi-Support":        config.get('multi_support', False),
                 "Build Adj":            config.get('build_adj', False),
                 "Subgraph Size":        config.get('subgraph_size', 20),
@@ -574,9 +583,12 @@ def main(run_all=True):
                 df_node.to_excel(node_path, index=False)
             print(f"→ Appended per-node RMSE (best F_w={best_fw}) to {node_path}")
 
+        _fd = config.get('fd_config') or {}
+        _rc = config.get('rf_config') or {}
         for fw_step, test_rmse_mean, test_rmse_std, geolayer_summary, _, _ in step_results:
             row = {
                 "Timestamp":                datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+                "Variant":                  model_base,
                 "Model Type":               config["model_type"],
                 "Graph Type":               config["graph_type"],
                 "Percentage":               config["percentage"],
@@ -586,6 +598,12 @@ def main(run_all=True):
                 'Weight Mode':              config['weight_mode'],
                 'RF Weight Range':          f"{config.get('rf_weight_min', '')}-{config.get('rf_weight_max', '')}" if config['weight_mode'] in ('variable', 'full') else "",
                 'VIM Min':                  config.get('rf_vim_min', '') if config['weight_mode'] == 'full' else "",
+                'FD Radius':                _fd.get('radius', ''),
+                'FD Weight Max':            _fd.get('weight_max', ''),
+                'FD Pump Weight':           _fd.get('pump_weight', ''),
+                'FD River Weight':          _fd.get('river_weight', ''),
+                'RF Cutoff':                _rc.get('cutoff', ''),
+                'RF Min Conn':              _rc.get('min_connections', ''),
                 'Multi-Support':            config.get('multi_support', False),
                 'Adaptive Init':            config.get('adaptive_graph_type', '') if config.get('multi_support') else "",
                 'Same Layer':               config['layer_constrain'],

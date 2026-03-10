@@ -109,6 +109,8 @@ _DROP_NODE = ['B39F0739-003']
 _SEEDS = [42, 123, 256, 512, 777, 1024, 2048, 3141]
 _5R_TAG = 'seed_experiment/5_rivers'
 
+_DO_TAG = 'seed_experiment/5_rivers'  # same output folder, dropout suffix in filename
+
 explicit_configs = [
     # ---- Feature-distance r=0.10 — remaining 5 seeds (42, 123, 256 already done) ----
     *[{'graph_type': 'feature_distance',
@@ -121,6 +123,49 @@ explicit_configs = [
        'seed': s, 'seed_experiment_name': _5R_TAG}
       for r in (0.05, 0.08, 0.12)
       for s in _SEEDS[:3]],
+    # ══════════════════════════════════════════════════════════════════
+    # Node-dropout runs — best config per graph type × 8 seeds
+    # ══════════════════════════════════════════════════════════════════
+    # ---- default (fixed) ----
+    *[{'graph_type': 'default', 'weight_mode': 'fixed',
+       'node_dropout': True,
+       'seed': s, 'seed_experiment_name': _DO_TAG}
+      for s in _SEEDS],
+    # ---- geolayer (fixed) ----
+    *[{'graph_type': 'geolayer', 'weight_mode': 'fixed',
+       'node_dropout': True,
+       'seed': s, 'seed_experiment_name': _DO_TAG}
+      for s in _SEEDS],
+    # ---- RF full VIM=0.02 ----
+    *[{'graph_type': 'rf', 'weight_mode': 'full', 'rf_vim_min': 0.02,
+       'node_dropout': True,
+       'seed': s, 'seed_experiment_name': _DO_TAG}
+      for s in _SEEDS],
+    # ---- Feature-distance r=0.15, wm=0.2 ----
+    *[{'graph_type': 'feature_distance',
+       'fd_config': {'radius': 0.15, 'weight_max': 0.2},
+       'node_dropout': True,
+       'seed': s, 'seed_experiment_name': _DO_TAG}
+      for s in _SEEDS],
+    # ---- Shortest-path binary + s=0.005 + hexo ----
+    *[{'graph_type': 'shortest_path',
+       'sp_config': {'resistance_source': 'binary',
+                     'sp_min_sensitivity': 0.005,
+                     'sp_min_connections': 2,
+                     'use_hydraulic_exo': True},
+       'node_dropout': True,
+       'seed': s, 'seed_experiment_name': _DO_TAG}
+      for s in _SEEDS],
+    # ---- Mixed ----
+    *[{'graph_type': 'mixed',
+       'node_dropout': True,
+       'seed': s, 'seed_experiment_name': _DO_TAG}
+      for s in _SEEDS],
+    # ---- RF multi-support ----
+    *[{'graph_type': 'rf', 'weight_mode': 'fixed', 'multi_support': True,
+       'node_dropout': True,
+       'seed': s, 'seed_experiment_name': _DO_TAG}
+      for s in _SEEDS],
 ]
 
 # Previous config (kept for reference):
