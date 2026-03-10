@@ -113,6 +113,29 @@ _DO_TAG = 'seed_experiment/5_rivers'  # same output folder, dropout suffix in fi
 
 explicit_configs = [
     # ══════════════════════════════════════════════════════════════════
+    # Remaining node-dropout runs (default/geolayer/rf/fd completed)
+    # ══════════════════════════════════════════════════════════════════
+    # ---- Shortest-path binary + s=0.005 + hexo ----
+    *[{'graph_type': 'shortest_path',
+       'sp_config': {'resistance_source': 'binary',
+                     'sp_min_sensitivity': 0.005,
+                     'sp_min_connections': 2,
+                     'use_hydraulic_exo': True},
+       'node_dropout': True,
+       'seed': s, 'seed_experiment_name': _DO_TAG}
+      for s in _SEEDS],
+    # ---- Mixed ----
+    *[{'graph_type': 'mixed',
+       'node_dropout': True,
+       'seed': s, 'seed_experiment_name': _DO_TAG}
+      for s in _SEEDS],
+    # ---- RF multi-support ----
+    *[{'graph_type': 'rf', 'weight_mode': 'fixed', 'multi_support': True,
+       'node_dropout': True,
+       'seed': s, 'seed_experiment_name': _DO_TAG}
+      for s in _SEEDS],
+
+    # ══════════════════════════════════════════════════════════════════
     # n_pumps=3 runs — best config per graph type × 8 seeds
     # ══════════════════════════════════════════════════════════════════
     # ---- default (fixed) ----
