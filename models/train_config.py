@@ -113,27 +113,27 @@ _DO_TAG = 'seed_experiment/5_rivers'  # same output folder, dropout suffix in fi
 
 explicit_configs = [
     # ══════════════════════════════════════════════════════════════════
-    # Node-dropout runs — best config per graph type × 8 seeds
+    # n_pumps=3 runs — best config per graph type × 8 seeds
     # ══════════════════════════════════════════════════════════════════
     # ---- default (fixed) ----
     *[{'graph_type': 'default', 'weight_mode': 'fixed',
-       'node_dropout': True,
+       'n_pumps_connected': 3,
        'seed': s, 'seed_experiment_name': _DO_TAG}
       for s in _SEEDS],
     # ---- geolayer (fixed) ----
     *[{'graph_type': 'geolayer', 'weight_mode': 'fixed',
-       'node_dropout': True,
+       'n_pumps_connected': 3,
        'seed': s, 'seed_experiment_name': _DO_TAG}
       for s in _SEEDS],
     # ---- RF full VIM=0.02 ----
     *[{'graph_type': 'rf', 'weight_mode': 'full', 'rf_vim_min': 0.02,
-       'node_dropout': True,
+       'n_pumps_connected': 3,
        'seed': s, 'seed_experiment_name': _DO_TAG}
       for s in _SEEDS],
     # ---- Feature-distance r=0.15, wm=0.2 ----
     *[{'graph_type': 'feature_distance',
        'fd_config': {'radius': 0.15, 'weight_max': 0.2},
-       'node_dropout': True,
+       'n_pumps_connected': 3,
        'seed': s, 'seed_experiment_name': _DO_TAG}
       for s in _SEEDS],
     # ---- Shortest-path binary + s=0.005 + hexo ----
@@ -142,17 +142,17 @@ explicit_configs = [
                      'sp_min_sensitivity': 0.005,
                      'sp_min_connections': 2,
                      'use_hydraulic_exo': True},
-       'node_dropout': True,
+       'n_pumps_connected': 3,
        'seed': s, 'seed_experiment_name': _DO_TAG}
       for s in _SEEDS],
     # ---- Mixed ----
     *[{'graph_type': 'mixed',
-       'node_dropout': True,
+       'n_pumps_connected': 3,
        'seed': s, 'seed_experiment_name': _DO_TAG}
       for s in _SEEDS],
     # ---- RF multi-support ----
     *[{'graph_type': 'rf', 'weight_mode': 'fixed', 'multi_support': True,
-       'node_dropout': True,
+       'n_pumps_connected': 3,
        'seed': s, 'seed_experiment_name': _DO_TAG}
       for s in _SEEDS],
 ]
