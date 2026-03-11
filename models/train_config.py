@@ -111,18 +111,55 @@ _5R_TAG = 'seed_experiment/5_rivers'
 
 _DO_TAG = 'seed_experiment/5_rivers'  # same output folder, dropout suffix in filename
 
+# ── Per-variant base overrides (graph-type-specific settings) ──
+_VARIANT_BASES = {
+    'default': {'graph_type': 'default'},
+    'geolayer': {'graph_type': 'geolayer'},
+    'rf_vim002': {
+        'graph_type': 'rf',
+        'weight_mode': 'full',
+        'rf_vim_min': 0.02,
+        'rf_weight_min': 0.08,
+        'rf_weight_max': 0.2,
+    },
+    'fd_r015_wm02': {
+        'graph_type': 'feature_distance',
+        'fd_config': {'radius': 0.15, 'weight_max': 0.2},
+    },
+    'sp_binary_hexo': {
+        'graph_type': 'shortest_path',
+        'sp_config': {
+            'resistance_source': 'binary',
+            'sp_min_sensitivity': 0.005,
+            'sp_min_connections': 2,
+            'use_hydraulic_exo': True,
+        },
+    },
+    'mixed': {'graph_type': 'mixed'},
+    'rf_ms': {
+        'graph_type': 'rf',
+        'multi_support': True,
+        'build_adj': False,
+        'adaptive_graph_type': 'rf',
+    },
+}
+
+# ── 5 new conditions: n_pumps × dropout ──
+_CONDITIONS = [
+    {'n_pumps_connected': 2, 'node_dropout': False},   # n_pumps=2
+    {'n_pumps_connected': 1, 'node_dropout': False},   # n_pumps=1
+    {'n_pumps_connected': 3, 'node_dropout': True},    # n_pumps=3 + dropout
+    {'n_pumps_connected': 2, 'node_dropout': True},    # n_pumps=2 + dropout
+    {'n_pumps_connected': 1, 'node_dropout': True},    # n_pumps=1 + dropout
+]
+
 explicit_configs = [
     # ══════════════════════════════════════════════════════════════════
-    # Fill remaining baseline gaps (pump=4, no dropout)
+    # 5 conditions × 7 variants × 8 seeds = 280 runs
     # ══════════════════════════════════════════════════════════════════
-    # ---- FD r=0.15 wm=0.2 baseline: 5 missing seeds ----
-    *[{'graph_type': 'feature_distance',
-       'fd_config': {'radius': 0.15, 'weight_max': 0.2},
-       'seed': s, 'seed_experiment_name': _5R_TAG}
-      for s in [512, 777, 1024, 2048, 3141]],
-    # ---- Mixed baseline: all 8 seeds ----
-    *[{'graph_type': 'mixed',
-       'seed': s, 'seed_experiment_name': _5R_TAG}
+    *[{**var_cfg, **cond, 'seed': s, 'seed_experiment_name': _5R_TAG}
+      for cond in _CONDITIONS
+      for var_cfg in _VARIANT_BASES.values()
       for s in _SEEDS],
 ]
 
