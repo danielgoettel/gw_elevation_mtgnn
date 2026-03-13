@@ -99,6 +99,14 @@ def define_base_configuration():
             'cutoff': 0.01,            # min RF importance to create an edge
             'min_connections': 3,      # guaranteed minimum piezo-piezo connections
         },
+
+        # Log-scaled pump weights (Thiem equation) — set to a dict to enable.
+        # Distance-based pump weights: closer pump → higher weight.
+        # 'multiplier' tunes the scaling (1.0 = full range, <1 compresses to w_min).
+        # Weights are clipped to [w_min, w_max].
+        # 'R' is the radius of influence in metres (default 25 km).
+        'log_pump_config': None,
+        # Example: {'multiplier': 1.0, 'w_min': 0.1, 'w_max': 0.3, 'R': 25000}
     }
 
 # --------------------------------------------------------------------------
@@ -204,11 +212,16 @@ _BEST_PER_FAMILY = {
         'graph_type': 'mixed',
         'n_pumps_connected': 1, 'node_dropout': False,
     },
+    'adaptive': {
+        'graph_type': 'default',
+        'build_adj': True, 'gcn_true': True,
+        'n_pumps_connected': 4, 'node_dropout': False,
+    },
 }
 
 # ── Exogenous ablation conditions ──
 _EXO_ABLATIONS = [
-    {},                                                          # baseline (no ablation)
+    # Baselines (no ablation) already exist in 5_rivers/ with 8 seeds
     {'remove_pumps': True},                                      # no pumps
     {'remove_rivers': True},                                     # no rivers
     {'remove_pumps': True, 'remove_rivers': True},               # no pumps or rivers
@@ -217,18 +230,43 @@ _EXO_ABLATIONS = [
      'remove_precip': True, 'remove_evap': True},                # piezo-only
 ]
 
+# ── Pump weight ablation: Thiem vs Coherence × 7 families × 3 seeds = 42 runs ──
+_PUMP_WEIGHT_FAMILIES = {k: v for k, v in _BEST_PER_FAMILY.items() if k != 'adaptive'}
+
+_PUMP_WEIGHT_SCHEMES = {
+    'thiem': {'source': 'thiem', 'multiplier': 1.0, 'w_min': 0.1, 'w_max': 0.3, 'R': 10000},
+    'coherence': {'source': 'coherence'},
+}
+
 explicit_configs = [
     # ══════════════════════════════════════════════════════════════════
-    # Exogenous ablation: 6 conditions × 7 families × 3 seeds = 126 runs
+    # Pump weight ablation: 2 schemes × 7 families × 3 seeds = 42 runs
     # ══════════════════════════════════════════════════════════════════
     *[{**fam_cfg,
-       'exo_ablation': abl if abl else None,
+       'log_pump_config': pw_cfg,
        'seed': s,
        'seed_experiment_name': _5R_TAG + '/ablation'}
-      for fam_cfg in _BEST_PER_FAMILY.values()
-      for abl in _EXO_ABLATIONS
+      for fam_cfg in _PUMP_WEIGHT_FAMILIES.values()
+      for pw_cfg in _PUMP_WEIGHT_SCHEMES.values()
       for s in _ABLATION_SEEDS],
 ]
+
+# Previous config (kept for reference):
+# explicit_configs = [
+#     # Exogenous ablation: 5 conditions × 8 families × 3 seeds = 120 runs
+#     *[{**fam_cfg,
+#        'exo_ablation': abl,
+#        'seed': s,
+#        'seed_experiment_name': _5R_TAG + '/ablation'}
+#       for fam_cfg in _BEST_PER_FAMILY.values()
+#       for abl in _EXO_ABLATIONS
+#       for s in _ABLATION_SEEDS],
+#     # Adaptive graph baselines — 3 seeds
+#     *[{**_BEST_PER_FAMILY['adaptive'],
+#        'seed': s,
+#        'seed_experiment_name': _5R_TAG + '/ablation'}
+#       for s in _ABLATION_SEEDS],
+# ]
 
 # Previous config (kept for reference):
 # explicit_configs = [

@@ -51,6 +51,7 @@ RIVER_PATH = INPUT_DIR / "river/river_daily.csv" #validated
 
 PIEZO_LAYER_INFORMATION = INPUT_DIR / "piezometers/piezometer_layer_information.csv"
 PUMP_DISTANCES = INPUT_DIR / "wells/wellfield_to_obswell_distances.csv"
+PUMP_COHERENCE_WEIGHTS = INPUT_DIR / "wells/pump_weights_coherence.csv"
 if IN_COLAB:
     HYDRAULIC_RESISTANCE_DIR = DRIVE_OUTPUT / "data" / "Shortest_Path_Graphs"
     REGIS_DIR = DRIVE_OUTPUT / "data" / "REGIS II Study Area Raster Data"

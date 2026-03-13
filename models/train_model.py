@@ -885,6 +885,13 @@ def run_training_and_evaluation(config):
             abl = config['exo_ablation']
             parts = sorted(k.replace('remove_', 'no_') for k, v in abl.items() if v)
             gt_label += '_' + '_'.join(parts)
+        if config.get('log_pump_config'):
+            lpc = config['log_pump_config']
+            if lpc.get('source') == 'coherence':
+                gt_label += '_pump_coherence'
+            else:
+                m = lpc.get('multiplier', 1.0)
+                gt_label += f'_pump_thiem_m{m}'
         run_dir = OUTPUTS_DIR / seed_folder / gt_label / model_base
     elif config.get('multi_support'):
         run_dir = OUTPUTS_DIR / "multi_support" / model_base
@@ -989,9 +996,9 @@ def run_training_and_evaluation(config):
             mean_gw_elevation=mean_gw_elevation,
             rmse_table_path=rmse_table_path,
             variant_graph_paths=variant_adj,
-            exo_ablation=config.get('exo_ablation'))
+            exo_ablation=config.get('exo_ablation'), log_pump_config=config.get('log_pump_config'))
     else:
-        A_tilde, static_features = gnn_data_prep.main(df_piezo_columns, pump_columns, locations_no_missing, config['graph_type'], config['percentage'] , config['n_piezo_connected'], config['feature_importance_multiplier'], config['n_pumps_connected'], config['weight_mode'], config['layer_constrain'], directed_graph=config.get('directed_graph', False), mean_gw_elevation=mean_gw_elevation, rf_weight_min=config.get('rf_weight_min', 0.08), rf_weight_max=config.get('rf_weight_max', 0.2), rf_vim_min=config.get('rf_vim_min', 0.01), rf_min_connections=config.get('rf_min_connections', 3), sp_config=config.get('sp_config'), fd_config=config.get('fd_config'), rf_config=config.get('rf_config'), exo_ablation=config.get('exo_ablation'))
+        A_tilde, static_features = gnn_data_prep.main(df_piezo_columns, pump_columns, locations_no_missing, config['graph_type'], config['percentage'] , config['n_piezo_connected'], config['feature_importance_multiplier'], config['n_pumps_connected'], config['weight_mode'], config['layer_constrain'], directed_graph=config.get('directed_graph', False), mean_gw_elevation=mean_gw_elevation, rf_weight_min=config.get('rf_weight_min', 0.08), rf_weight_max=config.get('rf_weight_max', 0.2), rf_vim_min=config.get('rf_vim_min', 0.01), rf_min_connections=config.get('rf_min_connections', 3), sp_config=config.get('sp_config'), fd_config=config.get('fd_config'), rf_config=config.get('rf_config'), exo_ablation=config.get('exo_ablation'), log_pump_config=config.get('log_pump_config'))
 
     heatmap_title = (f"{config.get('model_type', 'MTGNN')} | graph={config['graph_type']} | "
                      f"weight_mode={config['weight_mode']}<br>"

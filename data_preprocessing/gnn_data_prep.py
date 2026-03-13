@@ -19,7 +19,7 @@ from config import (
     PIEZO_METADATA, PUMP_METADATA, PUMP_DISTANCES, EVAP_METADATA,
     PREC_METADATA, RIVER_METADATA, PREPROCESSED_DIR, RANDOM_FOREST_TRAINING_DATA, GENERATED_GRAPHS,
     RF_TRAINED_ALL, RF_TRAINED_PIEZOS_ONLY, PIEZO_LAYER_INFORMATION,
-    HYDRAULIC_RESISTANCE_DIR
+    HYDRAULIC_RESISTANCE_DIR, PUMP_COHERENCE_WEIGHTS
 )
 
 def euclidean_distance(x1, y1, x2, y2):
@@ -54,6 +54,105 @@ def get_n_closest_pumps_indices(n, num_piezo, pump_distances_file=PUMP_DISTANCES
 
     # take the first n indices for each row, offset by num_piezo
     return sorted_pump_indices[:, :n] + num_piezo
+
+
+def compute_log_pump_weights(
+    num_piezo,
+    n_pumps_connected=4,
+    pump_distances_file=PUMP_DISTANCES,
+    multiplier=1.0,
+    w_min=0.1,
+    w_max=0.3,
+    R=10000,
+):
+    """
+    Compute pump edge weights based on logarithmic drawdown decay (Thiem equation).
+
+    Drawdown ∝ ln(R/r), where R is the radius of influence and r is the
+    distance from the well.  Weights are scaled to [w_min, w_max].
+    Piezometers beyond R are disconnected (weight = 0).
+
+    Parameters
+    ----------
+    num_piezo : int
+        Number of piezometers (used as offset for pump node indices).
+    n_pumps_connected : int
+        Number of closest pumps per piezometer (only those within R are kept).
+    pump_distances_file : str or Path
+        CSV with piezometer-to-pump distances (num_piezo × num_pumps, no header).
+    multiplier : float
+        Tunable scaling factor applied after the log mapping.
+        multiplier=1.0 gives the full [w_min, w_max] range;
+        <1 compresses towards w_min, >1 pushes towards w_max.
+    w_min, w_max : float
+        Output weight bounds (default 0.1–0.3).
+    R : float
+        Radius of influence (m).  Piezometers beyond R get weight 0
+        (disconnected).  Default 10 km.
+
+    Returns
+    -------
+    weights_matrix : np.ndarray, shape (num_piezo, n_pumps)
+        Full piezo × pump weight matrix. Zero = no connection.
+    """
+    dist_array = pd.read_csv(pump_distances_file, header=None).values  # (P, 4)
+    n_piezo, n_pumps = dist_array.shape
+
+    # Thiem-style log influence for ALL pump-piezo pairs
+    clamped_dist = np.clip(dist_array, 1.0, None)
+
+    # ln(R/r): positive when r < R, zero/negative when r >= R
+    log_influence = np.log(R / clamped_dist)
+    log_max = np.log(R / 1.0)
+
+    # Normalise to [0, 1] then scale to [w_min, w_max]
+    normed = np.clip(log_influence / log_max, 0, 1)
+    w = w_min + (w_max - w_min) * normed * multiplier
+    w = np.clip(w, w_min, w_max)
+
+    # Zero out piezometers beyond R (disconnected)
+    w[dist_array >= R] = 0.0
+
+    # Enforce n_pumps_connected limit: keep only n closest per piezo
+    if n_pumps_connected < n_pumps:
+        sorted_idx = np.argsort(dist_array, axis=1)
+        for i in range(n_piezo):
+            far_pumps = sorted_idx[i, n_pumps_connected:]
+            w[i, far_pumps] = 0.0
+
+    n_connected = (w > 0).sum()
+    print(f"  Thiem pump weights: R={R/1000:.0f} km, "
+          f"{n_connected}/{n_piezo * n_pumps} edges, "
+          f"range=[{w[w > 0].min():.3f}, {w[w > 0].max():.3f}]")
+
+    return w
+
+
+def compute_coherence_pump_weights(
+    num_piezo,
+    num_pump,
+    coherence_weights_file=PUMP_COHERENCE_WEIGHTS,
+):
+    """
+    Load pre-computed coherence-based pump weights from CSV.
+
+    The CSV has shape (num_piezo, num_pump) with index=piezometer names,
+    columns=pump names.  Zero values mean no connection.
+
+    Returns
+    -------
+    weights_matrix : np.ndarray, shape (num_piezo, num_pump)
+        Per-edge weights (0 = disconnected).
+    """
+    df = pd.read_csv(coherence_weights_file, index_col=0)
+    weights_matrix = df.values  # (num_piezo, num_pump)
+    assert weights_matrix.shape == (num_piezo, num_pump), (
+        f"Coherence weights shape {weights_matrix.shape} != ({num_piezo}, {num_pump})")
+    n_connected = (weights_matrix > 0).sum()
+    print(f"  Coherence pump weights: {n_connected}/{weights_matrix.size} edges, "
+          f"range=[{weights_matrix[weights_matrix > 0].min():.3f}, "
+          f"{weights_matrix[weights_matrix > 0].max():.3f}]")
+    return weights_matrix
 
 
 def build_same_layer_block(
@@ -1248,7 +1347,7 @@ def generate_mixed_optimal_adjacency(rmse_table_path, variant_adj_matrices, num_
     return mixed_adj, best_variant_per_node
 
 
-def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, percentage=None, n_piezo_connected=3, feature_importance_multiplier = None, n_pumps_connected = 4, weight_mode = 'fixed', same_layer = False, directed_graph=False, mean_gw_elevation=None, rf_weight_min=0.08, rf_weight_max=0.2, rf_vim_min=0.01, rf_min_connections=3, rmse_table_path=None, variant_graph_paths=None, sp_config=None, fd_config=None, rf_config=None, exo_ablation=None):
+def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, percentage=None, n_piezo_connected=3, feature_importance_multiplier = None, n_pumps_connected = 4, weight_mode = 'fixed', same_layer = False, directed_graph=False, mean_gw_elevation=None, rf_weight_min=0.08, rf_weight_max=0.2, rf_vim_min=0.01, rf_min_connections=3, rmse_table_path=None, variant_graph_paths=None, sp_config=None, fd_config=None, rf_config=None, exo_ablation=None, log_pump_config=None):
     # Paths to the metadata files (update these paths according to your folder structure)
 
     metadata_path = PIEZO_METADATA
@@ -1382,6 +1481,32 @@ def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, perce
 
     else:
         raise ValueError(f"Unknown graph_type: {graph_type}")
+
+    # ── Custom pump weights (Thiem or coherence) ──
+    if log_pump_config is not None:
+        lpc = log_pump_config
+        source = lpc.get('source', 'thiem')
+
+        if source == 'coherence':
+            # Load pre-computed coherence weights (200 × 4 matrix with zeros for disconnected)
+            coh_weights = compute_coherence_pump_weights(num_piezo, num_pump)
+            adj_matrix[:num_piezo, num_piezo:num_piezo + num_pump] = coh_weights
+        else:
+            # Default: Thiem log-scaled weights with R cutoff
+            thiem_weights = compute_log_pump_weights(
+                num_piezo,
+                n_pumps_connected=n_pumps_connected,
+                multiplier=lpc.get('multiplier', 1.0),
+                w_min=lpc.get('w_min', 0.1),
+                w_max=lpc.get('w_max', 0.3),
+                R=lpc.get('R', 10000),
+            )
+            adj_matrix[:num_piezo, num_piezo:num_piezo + num_pump] = thiem_weights
+
+        # Symmetrise pump edges
+        adj_matrix[num_piezo:num_piezo + num_pump, :num_piezo] = (
+            adj_matrix[:num_piezo, num_piezo:num_piezo + num_pump].T
+        )
 
     # ── Exogenous ablation: selectively remove node-type edges post-hoc ──
     if exo_ablation:
