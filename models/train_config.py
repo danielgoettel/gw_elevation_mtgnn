@@ -5,7 +5,7 @@ def define_base_configuration():
         'n_piezo_connected': 3,
         'W': 5,
         'gcn_true': True,
-        'build_adj': False,  #ALWAYS FALSE
+        'build_adj': False,
         'gcn_depth': 4,
         'kernel_set': [1, 2],
         'kernel_size': 2,
@@ -142,6 +142,11 @@ _VARIANT_BASES = {
         'build_adj': False,
         'adaptive_graph_type': 'rf',
     },
+    'adaptive': {
+        'graph_type': 'default',
+        'build_adj': True,
+        'gcn_true': True,
+    },
 }
 
 # ── 5 new conditions: n_pumps × dropout ──
@@ -153,14 +158,76 @@ _CONDITIONS = [
     {'n_pumps_connected': 1, 'node_dropout': True},    # n_pumps=1 + dropout
 ]
 
+# ── Best config per graph family (from seed experiment analysis) ──
+# Each entry uses the n_pumps and dropout settings that produced the lowest RMSE.
+_ABLATION_SEEDS = [42, 123, 256]
+
+_BEST_PER_FAMILY = {
+    'default': {
+        'graph_type': 'default',
+        'n_pumps_connected': 1, 'node_dropout': False,
+    },
+    'geolayer': {
+        'graph_type': 'geolayer',
+        'n_pumps_connected': 3, 'node_dropout': False,
+    },
+    'rf': {
+        'graph_type': 'rf', 'weight_mode': 'full',
+        'rf_vim_min': 0.02, 'rf_weight_min': 0.08, 'rf_weight_max': 0.2,
+        'n_pumps_connected': 2, 'node_dropout': True,
+    },
+    'feature_distance': {
+        'graph_type': 'feature_distance',
+        'fd_config': {'radius': 0.15, 'weight_max': 0.2},
+        'n_pumps_connected': 4, 'node_dropout': False,
+    },
+    'sp_binary': {
+        'graph_type': 'shortest_path',
+        'sp_config': {
+            'resistance_source': 'binary',
+            'sp_min_sensitivity': 0.005,
+            'sp_min_connections': 2,
+            'use_hydraulic_exo': True,
+        },
+        'n_pumps_connected': 4, 'node_dropout': False,
+    },
+    'sp_regis': {
+        'graph_type': 'shortest_path',
+        'sp_config': {
+            'resistance_source': 'regis',
+            'sp_min_sensitivity': 0.02,
+            'sp_min_connections': 2,
+        },
+        'n_pumps_connected': 4, 'node_dropout': False,
+    },
+    'mixed': {
+        'graph_type': 'mixed',
+        'n_pumps_connected': 1, 'node_dropout': False,
+    },
+}
+
+# ── Exogenous ablation conditions ──
+_EXO_ABLATIONS = [
+    {},                                                          # baseline (no ablation)
+    {'remove_pumps': True},                                      # no pumps
+    {'remove_rivers': True},                                     # no rivers
+    {'remove_pumps': True, 'remove_rivers': True},               # no pumps or rivers
+    {'remove_precip': True, 'remove_evap': True},                # no climate forcing
+    {'remove_pumps': True, 'remove_rivers': True,
+     'remove_precip': True, 'remove_evap': True},                # piezo-only
+]
+
 explicit_configs = [
     # ══════════════════════════════════════════════════════════════════
-    # 5 conditions × 7 variants × 8 seeds = 280 runs
+    # Exogenous ablation: 6 conditions × 7 families × 3 seeds = 126 runs
     # ══════════════════════════════════════════════════════════════════
-    *[{**var_cfg, **cond, 'seed': s, 'seed_experiment_name': _5R_TAG}
-      for cond in _CONDITIONS
-      for var_cfg in _VARIANT_BASES.values()
-      for s in _SEEDS],
+    *[{**fam_cfg,
+       'exo_ablation': abl if abl else None,
+       'seed': s,
+       'seed_experiment_name': _5R_TAG + '/ablation'}
+      for fam_cfg in _BEST_PER_FAMILY.values()
+      for abl in _EXO_ABLATIONS
+      for s in _ABLATION_SEEDS],
 ]
 
 # Previous config (kept for reference):

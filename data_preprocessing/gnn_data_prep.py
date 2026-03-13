@@ -1248,7 +1248,7 @@ def generate_mixed_optimal_adjacency(rmse_table_path, variant_adj_matrices, num_
     return mixed_adj, best_variant_per_node
 
 
-def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, percentage=None, n_piezo_connected=3, feature_importance_multiplier = None, n_pumps_connected = 4, weight_mode = 'fixed', same_layer = False, directed_graph=False, mean_gw_elevation=None, rf_weight_min=0.08, rf_weight_max=0.2, rf_vim_min=0.01, rf_min_connections=3, rmse_table_path=None, variant_graph_paths=None, sp_config=None, fd_config=None, rf_config=None):
+def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, percentage=None, n_piezo_connected=3, feature_importance_multiplier = None, n_pumps_connected = 4, weight_mode = 'fixed', same_layer = False, directed_graph=False, mean_gw_elevation=None, rf_weight_min=0.08, rf_weight_max=0.2, rf_vim_min=0.01, rf_min_connections=3, rmse_table_path=None, variant_graph_paths=None, sp_config=None, fd_config=None, rf_config=None, exo_ablation=None):
     # Paths to the metadata files (update these paths according to your folder structure)
 
     metadata_path = PIEZO_METADATA
@@ -1382,6 +1382,37 @@ def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, perce
 
     else:
         raise ValueError(f"Unknown graph_type: {graph_type}")
+
+    # ── Exogenous ablation: selectively remove node-type edges post-hoc ──
+    if exo_ablation:
+        pump_start = num_piezo
+        pump_end = num_piezo + num_pump
+        prec_start = pump_end
+        prec_end = prec_start + num_prec
+        evap_start = prec_end
+        evap_end = evap_start + num_evap
+        river_start = num_piezo + num_pump + num_prec + num_evap
+        river_end = river_start + num_river
+
+        if exo_ablation.get('remove_pumps'):
+            adj_matrix[:, pump_start:pump_end] = 0
+            adj_matrix[pump_start:pump_end, :] = 0
+            print("  Exo ablation: removed all pump edges")
+        if exo_ablation.get('remove_precip'):
+            adj_matrix[:, prec_start:prec_end] = 0
+            adj_matrix[prec_start:prec_end, :] = 0
+            print("  Exo ablation: removed all precipitation edges")
+        if exo_ablation.get('remove_evap'):
+            adj_matrix[:, evap_start:evap_end] = 0
+            adj_matrix[evap_start:evap_end, :] = 0
+            print("  Exo ablation: removed all evaporation edges")
+        if exo_ablation.get('remove_rivers'):
+            adj_matrix[:, river_start:river_end] = 0
+            adj_matrix[river_start:river_end, :] = 0
+            print("  Exo ablation: removed all river edges")
+
+        remaining = np.count_nonzero(adj_matrix)
+        print(f"  Exo ablation: {remaining} non-zero entries remaining")
 
     # Apply directional mask: keep piezo-piezo edges only from higher to lower GW elevation
     if directed_graph and mean_gw_elevation is not None:
