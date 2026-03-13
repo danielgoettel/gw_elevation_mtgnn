@@ -95,7 +95,7 @@ def compute_log_pump_weights(
     weights_matrix : np.ndarray, shape (num_piezo, n_pumps)
         Full piezo × pump weight matrix. Zero = no connection.
     """
-    dist_array = pd.read_csv(pump_distances_file, header=None).values  # (P, 4)
+    dist_array = pd.read_csv(pump_distances_file, header=0, index_col=0).values  # (P, 4)
     n_piezo, n_pumps = dist_array.shape
 
     # Thiem-style log influence for ALL pump-piezo pairs
