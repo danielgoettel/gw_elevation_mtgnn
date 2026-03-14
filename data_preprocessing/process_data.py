@@ -338,17 +338,23 @@ def split_and_normalize_data(df_piezo, missing_data_mask, external_data, config)
     combined_data = combined_data.dropna()
     missing_data_mask = missing_data_mask.loc[combined_data.index]
 
-    test_val_size = 0.2
-    # Split data into train, validation, and test sets initially
+    # Split ratios — 'val_split' key controls val/test separation
+    # None or 0  → val = test (legacy 80/20 behaviour)
+    # e.g. 0.5   → temp split in half → 70/10/20 when test_val_size=0.3
+    val_split = config.get('val_split', None)
+    test_val_size = config.get('test_val_size', 0.2)
+
     train_data, temp_data = train_test_split(combined_data, test_size=test_val_size, random_state=42, shuffle=False)
-    # val_data, test_data = train_test_split(temp_data, test_size=test_val_split, random_state=42, shuffle=False)
-    val_data = temp_data
-    test_data = temp_data
-    
     train_mask, temp_mask = train_test_split(missing_data_mask, test_size=test_val_size, random_state=42, shuffle=False)
-    # val_mask, test_mask = train_test_split(temp_mask, test_size=test_val_split, random_state=42, shuffle=False)
-    val_mask = temp_mask
-    test_mask = temp_mask
+
+    if val_split:
+        val_data, test_data = train_test_split(temp_data, test_size=val_split, random_state=42, shuffle=False)
+        val_mask, test_mask = train_test_split(temp_mask, test_size=val_split, random_state=42, shuffle=False)
+    else:
+        val_data = temp_data
+        test_data = temp_data
+        val_mask = temp_mask
+        test_mask = temp_mask
     # Normalize the datasets
     scaler = MinMaxScaler(feature_range=(0, 1))
     train_data = pd.DataFrame(scaler.fit_transform(train_data), index=train_data.index, columns=train_data.columns)

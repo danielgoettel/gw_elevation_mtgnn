@@ -786,8 +786,8 @@ def evaluate_and_output(model, config, test_data, test_mask, df_piezo_columns, n
     if plot_freq is None:
         plot_freq = pd.infer_freq(test_data.index) or '3h'
 
-    color_dict_seq = plot_comparison_sequence(test_input_, test_predicted_model_, test_target_, start_date_test, df_piezo_columns, mask=mask_seq_test, selected_nodes=None, output_dir=step_dir, freq=plot_freq)
-    color_dict_dual = plot_comparison_sequence_dual_y(test_input_, test_predicted_model_, test_target_, start_date_test, mask_seq_test, test_rmse, df_piezo_columns, output_dir=step_dir, freq=plot_freq)
+    # color_dict_seq = plot_comparison_sequence(test_input_, test_predicted_model_, test_target_, start_date_test, df_piezo_columns, mask=mask_seq_test, selected_nodes=None, output_dir=step_dir, freq=plot_freq)
+    # color_dict_dual = plot_comparison_sequence_dual_y(test_input_, test_predicted_model_, test_target_, start_date_test, mask_seq_test, test_rmse, df_piezo_columns, output_dir=step_dir, freq=plot_freq)
 
     # Layer info and RMSE summary
     layer_info = pd.read_csv(PIEZO_LAYER_INFORMATION).rename(columns=lambda x: x.strip())
@@ -816,11 +816,11 @@ def evaluate_and_output(model, config, test_data, test_mask, df_piezo_columns, n
         title_parts.append(f"node_dropout(warmup={config.get('node_dropout_warmup')}, sd={config.get('node_dropout_sd_threshold')})")
     title_str = " | ".join(title_parts)
 
-    try:
-        scatter = plot_rmse_3d_network(rmse_df, title_str, adj_matrix=A_tilde)
-        scatter.write_html(str(step_dir / 'rmse3d.html'), include_plotlyjs='cdn')
-    except Exception as e:
-        print(f"Skipped 3D RMSE plot for {title_str}: {e}")
+    # try:
+    #     scatter = plot_rmse_3d_network(rmse_df, title_str, adj_matrix=A_tilde)
+    #     scatter.write_html(str(step_dir / 'rmse3d.html'), include_plotlyjs='cdn')
+    # except Exception as e:
+    #     print(f"Skipped 3D RMSE plot for {title_str}: {e}")
 
     geolayer_summary = merged.groupby('geolayer')['rmse'].agg(['mean', 'std']).reset_index()
     geolayer_summary.columns = ['geolayer', 'RMSE Mean', 'RMSE StdDev']
@@ -888,10 +888,14 @@ def run_training_and_evaluation(config):
         if config.get('log_pump_config'):
             lpc = config['log_pump_config']
             if lpc.get('source') == 'coherence':
-                gt_label += '_pump_coherence'
+                band_tag = lpc.get('band', '')
+                gt_label += f'_pump_coherence{"_" + band_tag if band_tag else ""}'
             else:
                 m = lpc.get('multiplier', 1.0)
                 gt_label += f'_pump_thiem_m{m}'
+        if config.get('val_split'):
+            train_pct = int((1 - config.get('test_val_size', 0.3)) * 100)
+            gt_label += f'_split{train_pct}'
         run_dir = OUTPUTS_DIR / seed_folder / gt_label / model_base
     elif config.get('multi_support'):
         run_dir = OUTPUTS_DIR / "multi_support" / model_base

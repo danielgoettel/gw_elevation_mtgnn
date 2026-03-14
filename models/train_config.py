@@ -41,6 +41,11 @@ def define_base_configuration():
         'min_delta': 0.001,
         'scheduler_patience': 10,
 
+        # Data split — set val_split to enable a true validation set
+        # None → val = test (legacy 80/20); 0.667 + test_val_size=0.3 → 70/10/20
+        'test_val_size': 0.2,
+        'val_split': None,
+
         # Directed graph — piezo-piezo edges flow from higher to lower GW elevation
         'directed_graph': False,
 
@@ -236,18 +241,65 @@ _PUMP_WEIGHT_FAMILIES = {k: v for k, v in _BEST_PER_FAMILY.items() if k != 'adap
 _PUMP_WEIGHT_SCHEMES = {
     'thiem': {'source': 'thiem', 'multiplier': 1.0, 'w_min': 0.1, 'w_max': 0.3, 'R': 10000},
     'coherence': {'source': 'coherence'},
+    'coherence_90_365d': {'source': 'coherence', 'band': '90_365d'},
+    'coherence_gt365d': {'source': 'coherence', 'band': 'gt365d'},
 }
+
+# Completed pump weight runs removed; only remaining runs below.
+# Mixed thiem+coherence still pending; 90-365d and gt365d partially done.
+_MIXED_ONLY = {k: v for k, v in _PUMP_WEIGHT_FAMILIES.items() if k == 'mixed'}
+_NO_DEFAULT = {k: v for k, v in _PUMP_WEIGHT_FAMILIES.items() if k != 'default'}
+_NO_DEFAULT_GEO = {k: v for k, v in _PUMP_WEIGHT_FAMILIES.items() if k not in ('default', 'geolayer')}
 
 explicit_configs = [
     # ══════════════════════════════════════════════════════════════════
-    # Pump weight ablation: 2 schemes × 7 families × 3 seeds = 42 runs
+    # Pump weight: mixed thiem + coherence (6 runs)
     # ══════════════════════════════════════════════════════════════════
     *[{**fam_cfg,
        'log_pump_config': pw_cfg,
        'seed': s,
        'seed_experiment_name': _5R_TAG + '/ablation'}
-      for fam_cfg in _PUMP_WEIGHT_FAMILIES.values()
-      for pw_cfg in _PUMP_WEIGHT_SCHEMES.values()
+      for fam_cfg in _MIXED_ONLY.values()
+      for pw_cfg in [_PUMP_WEIGHT_SCHEMES['thiem'], _PUMP_WEIGHT_SCHEMES['coherence']]
+      for s in _ABLATION_SEEDS],
+
+    # ══════════════════════════════════════════════════════════════════
+    # Coh 90-365d: remaining families (geolayer s256 done separately)
+    # default done, geolayer 2/3 done, rest pending
+    # ══════════════════════════════════════════════════════════════════
+    # geolayer s256 (the one missing seed)
+    {**_PUMP_WEIGHT_FAMILIES['geolayer'],
+     'log_pump_config': _PUMP_WEIGHT_SCHEMES['coherence_90_365d'],
+     'seed': 256,
+     'seed_experiment_name': _5R_TAG + '/ablation'},
+    # all other families × 3 seeds
+    *[{**fam_cfg,
+       'log_pump_config': _PUMP_WEIGHT_SCHEMES['coherence_90_365d'],
+       'seed': s,
+       'seed_experiment_name': _5R_TAG + '/ablation'}
+      for fam_cfg in _NO_DEFAULT_GEO.values()
+      for s in _ABLATION_SEEDS],
+
+    # ══════════════════════════════════════════════════════════════════
+    # Coh >365d: all families except default (done) × 3 seeds
+    # ══════════════════════════════════════════════════════════════════
+    *[{**fam_cfg,
+       'log_pump_config': _PUMP_WEIGHT_SCHEMES['coherence_gt365d'],
+       'seed': s,
+       'seed_experiment_name': _5R_TAG + '/ablation'}
+      for fam_cfg in _NO_DEFAULT.values()
+      for s in _ABLATION_SEEDS],
+
+    # ══════════════════════════════════════════════════════════════════
+    # 70/10/20 split baseline: 8 families × 3 seeds = 24 runs
+    # True val set for fair architecture comparison (MTGNN vs GWNet)
+    # ══════════════════════════════════════════════════════════════════
+    *[{**fam_cfg,
+       'test_val_size': 0.3,
+       'val_split': 0.667,
+       'seed': s,
+       'seed_experiment_name': _5R_TAG + '/ablation'}
+      for fam_cfg in _BEST_PER_FAMILY.values()
       for s in _ABLATION_SEEDS],
 ]
 

@@ -1489,7 +1489,15 @@ def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, perce
 
         if source == 'coherence':
             # Load pre-computed coherence weights (200 × 4 matrix with zeros for disconnected)
-            coh_weights = compute_coherence_pump_weights(num_piezo, num_pump)
+            # Optional band suffix selects a band-specific CSV (e.g. '90_365d', 'gt365d')
+            band_suffix = lpc.get('band')
+            if band_suffix:
+                from config import INPUT_DIR
+                coh_file = INPUT_DIR / "wells" / f"pump_weights_coherence_{band_suffix}.csv"
+            else:
+                coh_file = PUMP_COHERENCE_WEIGHTS
+            coh_weights = compute_coherence_pump_weights(num_piezo, num_pump,
+                                                         coherence_weights_file=coh_file)
             adj_matrix[:num_piezo, num_piezo:num_piezo + num_pump] = coh_weights
         else:
             # Default: Thiem log-scaled weights with R cutoff
