@@ -245,62 +245,215 @@ _PUMP_WEIGHT_SCHEMES = {
     'coherence_gt365d': {'source': 'coherence', 'band': 'gt365d'},
 }
 
-# Completed pump weight runs removed; only remaining runs below.
-# Mixed thiem+coherence still pending; 90-365d and gt365d partially done.
-_MIXED_ONLY = {k: v for k, v in _PUMP_WEIGHT_FAMILIES.items() if k == 'mixed'}
-_NO_DEFAULT = {k: v for k, v in _PUMP_WEIGHT_FAMILIES.items() if k != 'default'}
-_NO_DEFAULT_GEO = {k: v for k, v in _PUMP_WEIGHT_FAMILIES.items() if k not in ('default', 'geolayer')}
+_EXTEND_SEEDS = [512, 777, 1024, 2048, 3141]
+
+# ── Configs that scored <20 cm mean on 3 seeds → extend to 8 seeds ──
+# Maps ablation condition to the exo_ablation override dict.
+_EXO_COND_MAP = {
+    'no_pumps': {'remove_pumps': True},
+    'no_rivers': {'remove_rivers': True},
+    'no_pumps_no_rivers': {'remove_pumps': True, 'remove_rivers': True},
+    'no_evap_no_precip': {'remove_precip': True, 'remove_evap': True},
+    'no_evap_no_precip_no_pumps_no_rivers': {
+        'remove_pumps': True, 'remove_rivers': True,
+        'remove_precip': True, 'remove_evap': True},
+}
 
 explicit_configs = [
     # ══════════════════════════════════════════════════════════════════
-    # Pump weight: mixed thiem + coherence (6 runs)
+    # Pump weight configs < 20 cm (3-seed) → remaining 5 seeds (75 runs)
     # ══════════════════════════════════════════════════════════════════
-    *[{**fam_cfg,
-       'log_pump_config': pw_cfg,
-       'seed': s,
-       'seed_experiment_name': _5R_TAG + '/ablation'}
-      for fam_cfg in _MIXED_ONLY.values()
-      for pw_cfg in [_PUMP_WEIGHT_SCHEMES['thiem'], _PUMP_WEIGHT_SCHEMES['coherence']]
-      for s in _ABLATION_SEEDS],
 
-    # ══════════════════════════════════════════════════════════════════
-    # Coh 90-365d: remaining families (geolayer s256 done separately)
-    # default done, geolayer 2/3 done, rest pending
-    # ══════════════════════════════════════════════════════════════════
-    # geolayer s256 (the one missing seed)
-    {**_PUMP_WEIGHT_FAMILIES['geolayer'],
-     'log_pump_config': _PUMP_WEIGHT_SCHEMES['coherence_90_365d'],
-     'seed': 256,
-     'seed_experiment_name': _5R_TAG + '/ablation'},
-    # all other families × 3 seeds
-    *[{**fam_cfg,
+    # mixed + thiem (16.66 cm)
+    *[{**_BEST_PER_FAMILY['mixed'],
+       'log_pump_config': _PUMP_WEIGHT_SCHEMES['thiem'],
+       'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'}
+      for s in _EXTEND_SEEDS],
+
+    # geolayer + coh 90-365d (17.38 cm)
+    *[{**_BEST_PER_FAMILY['geolayer'],
        'log_pump_config': _PUMP_WEIGHT_SCHEMES['coherence_90_365d'],
-       'seed': s,
-       'seed_experiment_name': _5R_TAG + '/ablation'}
-      for fam_cfg in _NO_DEFAULT_GEO.values()
-      for s in _ABLATION_SEEDS],
+       'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'}
+      for s in _EXTEND_SEEDS],
 
-    # ══════════════════════════════════════════════════════════════════
-    # Coh >365d: all families except default (done) × 3 seeds
-    # ══════════════════════════════════════════════════════════════════
-    *[{**fam_cfg,
+    # default + coh >365d (17.83 cm)
+    *[{**_BEST_PER_FAMILY['default'],
        'log_pump_config': _PUMP_WEIGHT_SCHEMES['coherence_gt365d'],
-       'seed': s,
-       'seed_experiment_name': _5R_TAG + '/ablation'}
-      for fam_cfg in _NO_DEFAULT.values()
-      for s in _ABLATION_SEEDS],
+       'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'}
+      for s in _EXTEND_SEEDS],
+
+    # default + coh 90-365d (18.13 cm)
+    *[{**_BEST_PER_FAMILY['default'],
+       'log_pump_config': _PUMP_WEIGHT_SCHEMES['coherence_90_365d'],
+       'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'}
+      for s in _EXTEND_SEEDS],
+
+    # sp_binary + coherence (18.30 cm)
+    *[{**_BEST_PER_FAMILY['sp_binary'],
+       'log_pump_config': _PUMP_WEIGHT_SCHEMES['coherence'],
+       'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'}
+      for s in _EXTEND_SEEDS],
+
+    # geolayer + thiem (18.36 cm)
+    *[{**_BEST_PER_FAMILY['geolayer'],
+       'log_pump_config': _PUMP_WEIGHT_SCHEMES['thiem'],
+       'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'}
+      for s in _EXTEND_SEEDS],
+
+    # sp_regis + thiem (18.65 cm)
+    *[{**_BEST_PER_FAMILY['sp_regis'],
+       'log_pump_config': _PUMP_WEIGHT_SCHEMES['thiem'],
+       'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'}
+      for s in _EXTEND_SEEDS],
+
+    # sp_binary + coh 90-365d (18.76 cm)
+    *[{**_BEST_PER_FAMILY['sp_binary'],
+       'log_pump_config': _PUMP_WEIGHT_SCHEMES['coherence_90_365d'],
+       'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'}
+      for s in _EXTEND_SEEDS],
+
+    # mixed + coh 90-365d (18.83 cm)
+    *[{**_BEST_PER_FAMILY['mixed'],
+       'log_pump_config': _PUMP_WEIGHT_SCHEMES['coherence_90_365d'],
+       'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'}
+      for s in _EXTEND_SEEDS],
+
+    # feature_distance + coherence (18.90 cm)
+    *[{**_BEST_PER_FAMILY['feature_distance'],
+       'log_pump_config': _PUMP_WEIGHT_SCHEMES['coherence'],
+       'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'}
+      for s in _EXTEND_SEEDS],
+
+    # feature_distance + thiem (19.37 cm)
+    *[{**_BEST_PER_FAMILY['feature_distance'],
+       'log_pump_config': _PUMP_WEIGHT_SCHEMES['thiem'],
+       'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'}
+      for s in _EXTEND_SEEDS],
+
+    # mixed + coherence (19.58 cm)
+    *[{**_BEST_PER_FAMILY['mixed'],
+       'log_pump_config': _PUMP_WEIGHT_SCHEMES['coherence'],
+       'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'}
+      for s in _EXTEND_SEEDS],
+
+    # sp_regis + coh >365d (19.67 cm)
+    *[{**_BEST_PER_FAMILY['sp_regis'],
+       'log_pump_config': _PUMP_WEIGHT_SCHEMES['coherence_gt365d'],
+       'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'}
+      for s in _EXTEND_SEEDS],
+
+    # rf + thiem (19.90 cm)
+    *[{**_BEST_PER_FAMILY['rf'],
+       'log_pump_config': _PUMP_WEIGHT_SCHEMES['thiem'],
+       'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'}
+      for s in _EXTEND_SEEDS],
+
+    # feature_distance + coh 90-365d (19.97 cm)
+    *[{**_BEST_PER_FAMILY['feature_distance'],
+       'log_pump_config': _PUMP_WEIGHT_SCHEMES['coherence_90_365d'],
+       'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'}
+      for s in _EXTEND_SEEDS],
 
     # ══════════════════════════════════════════════════════════════════
-    # 70/10/20 split baseline: 8 families × 3 seeds = 24 runs
-    # True val set for fair architecture comparison (MTGNN vs GWNet)
+    # Exogenous ablation configs < 20 cm (3-seed) → remaining 5 seeds (50 runs)
     # ══════════════════════════════════════════════════════════════════
-    *[{**fam_cfg,
-       'test_val_size': 0.3,
-       'val_split': 0.667,
-       'seed': s,
-       'seed_experiment_name': _5R_TAG + '/ablation'}
-      for fam_cfg in _BEST_PER_FAMILY.values()
-      for s in _ABLATION_SEEDS],
+
+    # geolayer no_pumps (18.07 cm)
+    *[{**_BEST_PER_FAMILY['geolayer'],
+       'exo_ablation': _EXO_COND_MAP['no_pumps'],
+       'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'}
+      for s in _EXTEND_SEEDS],
+
+    # sp_regis no_pumps (18.39 cm)
+    *[{**_BEST_PER_FAMILY['sp_regis'],
+       'exo_ablation': _EXO_COND_MAP['no_pumps'],
+       'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'}
+      for s in _EXTEND_SEEDS],
+
+    # mixed no_pumps (18.43 cm)
+    *[{**_BEST_PER_FAMILY['mixed'],
+       'exo_ablation': _EXO_COND_MAP['no_pumps'],
+       'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'}
+      for s in _EXTEND_SEEDS],
+
+    # sp_binary no_pumps (18.50 cm)
+    *[{**_BEST_PER_FAMILY['sp_binary'],
+       'exo_ablation': _EXO_COND_MAP['no_pumps'],
+       'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'}
+      for s in _EXTEND_SEEDS],
+
+    # geolayer no_pumps_no_rivers (18.67 cm)
+    *[{**_BEST_PER_FAMILY['geolayer'],
+       'exo_ablation': _EXO_COND_MAP['no_pumps_no_rivers'],
+       'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'}
+      for s in _EXTEND_SEEDS],
+
+    # rf no_pumps (18.70 cm)
+    *[{**_BEST_PER_FAMILY['rf'],
+       'exo_ablation': _EXO_COND_MAP['no_pumps'],
+       'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'}
+      for s in _EXTEND_SEEDS],
+
+    # mixed no_pumps_no_rivers (19.26 cm)
+    *[{**_BEST_PER_FAMILY['mixed'],
+       'exo_ablation': _EXO_COND_MAP['no_pumps_no_rivers'],
+       'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'}
+      for s in _EXTEND_SEEDS],
+
+    # rf no_rivers (19.28 cm)
+    *[{**_BEST_PER_FAMILY['rf'],
+       'exo_ablation': _EXO_COND_MAP['no_rivers'],
+       'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'}
+      for s in _EXTEND_SEEDS],
+
+    # feature_distance no_rivers (19.29 cm)
+    *[{**_BEST_PER_FAMILY['feature_distance'],
+       'exo_ablation': _EXO_COND_MAP['no_rivers'],
+       'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'}
+      for s in _EXTEND_SEEDS],
+
+    # rf no_pumps_no_rivers (19.45 cm)
+    *[{**_BEST_PER_FAMILY['rf'],
+       'exo_ablation': _EXO_COND_MAP['no_pumps_no_rivers'],
+       'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'}
+      for s in _EXTEND_SEEDS],
+
+    # geolayer no_rivers (19.60 cm)
+    *[{**_BEST_PER_FAMILY['geolayer'],
+       'exo_ablation': _EXO_COND_MAP['no_rivers'],
+       'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'}
+      for s in _EXTEND_SEEDS],
+
+    # default no_pumps (19.73 cm)
+    *[{**_BEST_PER_FAMILY['default'],
+       'exo_ablation': _EXO_COND_MAP['no_pumps'],
+       'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'}
+      for s in _EXTEND_SEEDS],
+
+    # feature_distance no_pumps_no_rivers (19.87 cm)
+    *[{**_BEST_PER_FAMILY['feature_distance'],
+       'exo_ablation': _EXO_COND_MAP['no_pumps_no_rivers'],
+       'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'}
+      for s in _EXTEND_SEEDS],
+
+    # mixed no_rivers (19.91 cm)
+    *[{**_BEST_PER_FAMILY['mixed'],
+       'exo_ablation': _EXO_COND_MAP['no_rivers'],
+       'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'}
+      for s in _EXTEND_SEEDS],
+
+    # ══════════════════════════════════════════════════════════════════
+    # Adaptive baseline (19.73 cm) → remaining 5 seeds (5 runs)
+    # ══════════════════════════════════════════════════════════════════
+    *[{**_BEST_PER_FAMILY['adaptive'],
+       'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'}
+      for s in _EXTEND_SEEDS],
+
+    # rf + coherence (20.00 cm — borderline, include)
+    *[{**_BEST_PER_FAMILY['rf'],
+       'log_pump_config': _PUMP_WEIGHT_SCHEMES['coherence'],
+       'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'}
+      for s in _EXTEND_SEEDS],
 ]
 
 # Previous config (kept for reference):
