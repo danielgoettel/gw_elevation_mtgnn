@@ -243,14 +243,19 @@ def record_result(config, test_rmse_mean, test_rmse_std):
     result['test_rmse_std'] = test_rmse_std
     results.append(result)
 
+def _to_hashable(x):
+    if isinstance(x, dict):
+        return str(sorted(x.items()))
+    if isinstance(x, list):
+        return tuple(x)
+    return x
+
 def make_hashable(df):
     """
     Convert any unhashable columns in the DataFrame to a hashable type.
-    This specifically targets lists, converting them to tuples.
     """
     for column in df.columns:
-        if df[column].apply(lambda x: isinstance(x, list)).any():
-            df[column] = df[column].apply(lambda x: tuple(x) if isinstance(x, list) else x)
+        df[column] = df[column].apply(_to_hashable)
     return df
 
 def analyze_results():
