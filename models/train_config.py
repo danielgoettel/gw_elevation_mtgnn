@@ -259,16 +259,97 @@ _EXO_COND_MAP = {
         'remove_precip': True, 'remove_evap': True},
 }
 
-explicit_configs = [
-    # ══════════════════════════════════════════════════════════════════
-    # 70/10/20 split — all 8 families × remaining 5 seeds (40 runs)
-    # ══════════════════════════════════════════════════════════════════
-    *[{**fam_cfg,
-       'val_split': 0.667, 'test_val_size': 0.3,
-       'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'}
-      for fam_cfg in _BEST_PER_FAMILY.values()
-      for s in _EXTEND_SEEDS],
-]
+# ── Fill the Family × Condition grid to 8 seeds ──
+# Missing cells identified from grid scan (42 cells, 222 runs total).
+# Cells already at 3 seeds need _EXTEND_SEEDS; cells at 0 need _SEEDS.
+
+_ALL_SEEDS = [42, 123, 256, 512, 777, 1024, 2048, 3141]
+
+# Map: (family_key, condition_key) -> seeds_needed
+# Only list cells that are NOT already at 8 seeds.
+_GRID_FILL = {
+    # ── Adaptive: exo ablation (have 3) + pump weights (have 0) ──
+    ('adaptive', 'no_pumps'):                           _EXTEND_SEEDS,
+    ('adaptive', 'no_rivers'):                          _EXTEND_SEEDS,
+    ('adaptive', 'no_pumps_no_rivers'):                 _EXTEND_SEEDS,
+    ('adaptive', 'no_evap_no_precip'):                  _EXTEND_SEEDS,
+    ('adaptive', 'no_evap_no_precip_no_pumps_no_rivers'): _EXTEND_SEEDS,
+    ('adaptive', 'thiem'):                              _ALL_SEEDS,
+    ('adaptive', 'coherence'):                          _ALL_SEEDS,
+    ('adaptive', 'coherence_90_365d'):                  _ALL_SEEDS,
+    ('adaptive', 'coherence_gt365d'):                   _ALL_SEEDS,
+    # ── Default: fill remaining ──
+    ('default', 'no_rivers'):                           _EXTEND_SEEDS,
+    ('default', 'no_pumps_no_rivers'):                  _EXTEND_SEEDS,
+    ('default', 'no_evap_no_precip'):                   _EXTEND_SEEDS,
+    ('default', 'no_evap_no_precip_no_pumps_no_rivers'): _EXTEND_SEEDS,
+    ('default', 'thiem'):                               _EXTEND_SEEDS,
+    ('default', 'coherence'):                           _EXTEND_SEEDS,
+    # ── FD ──
+    ('feature_distance', 'no_pumps'):                   _EXTEND_SEEDS,
+    ('feature_distance', 'no_evap_no_precip'):          _EXTEND_SEEDS,
+    ('feature_distance', 'no_evap_no_precip_no_pumps_no_rivers'): _EXTEND_SEEDS,
+    ('feature_distance', 'coherence_gt365d'):           _EXTEND_SEEDS,
+    # ── Geolayer ──
+    ('geolayer', 'no_evap_no_precip'):                  _EXTEND_SEEDS,
+    ('geolayer', 'no_evap_no_precip_no_pumps_no_rivers'): _EXTEND_SEEDS,
+    ('geolayer', 'coherence'):                          _EXTEND_SEEDS,
+    ('geolayer', 'coherence_gt365d'):                   _EXTEND_SEEDS,
+    # ── Mixed ──
+    ('mixed', 'no_evap_no_precip'):                     _EXTEND_SEEDS,
+    ('mixed', 'no_evap_no_precip_no_pumps_no_rivers'):  _EXTEND_SEEDS,
+    ('mixed', 'coherence_gt365d'):                      _EXTEND_SEEDS,
+    # ── RF ──
+    ('rf', 'no_evap_no_precip'):                        _EXTEND_SEEDS,
+    ('rf', 'no_evap_no_precip_no_pumps_no_rivers'):     _EXTEND_SEEDS,
+    ('rf', 'coherence_90_365d'):                        _EXTEND_SEEDS,
+    ('rf', 'coherence_gt365d'):                         _EXTEND_SEEDS,
+    # ── SP-REGIS ──
+    ('sp_regis', 'no_rivers'):                          _EXTEND_SEEDS,
+    ('sp_regis', 'no_pumps_no_rivers'):                 _EXTEND_SEEDS,
+    ('sp_regis', 'no_evap_no_precip'):                  _EXTEND_SEEDS,
+    ('sp_regis', 'no_evap_no_precip_no_pumps_no_rivers'): _EXTEND_SEEDS,
+    ('sp_regis', 'coherence'):                          _EXTEND_SEEDS,
+    ('sp_regis', 'coherence_90_365d'):                  _EXTEND_SEEDS,
+    # ── SP-binary ──
+    ('sp_binary', 'no_rivers'):                         _EXTEND_SEEDS,
+    ('sp_binary', 'no_pumps_no_rivers'):                _EXTEND_SEEDS,
+    ('sp_binary', 'no_evap_no_precip'):                 _EXTEND_SEEDS,
+    ('sp_binary', 'no_evap_no_precip_no_pumps_no_rivers'): _EXTEND_SEEDS,
+    ('sp_binary', 'thiem'):                             _EXTEND_SEEDS,
+    ('sp_binary', 'coherence_gt365d'):                  _EXTEND_SEEDS,
+}
+
+def _build_grid_configs():
+    """Generate explicit_configs from _GRID_FILL + split70 extension."""
+    configs = []
+
+    # Split70 extension (40 runs)
+    for fam_cfg in _BEST_PER_FAMILY.values():
+        for s in _EXTEND_SEEDS:
+            configs.append({**fam_cfg,
+                'val_split': 0.667, 'test_val_size': 0.3,
+                'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'})
+
+    # Grid fill
+    for (fam_key, cond_key), seeds in _GRID_FILL.items():
+        base = {**_BEST_PER_FAMILY[fam_key]}
+
+        # Apply condition overrides
+        if cond_key in _EXO_COND_MAP:
+            override = {'exo_ablation': _EXO_COND_MAP[cond_key]}
+        elif cond_key in _PUMP_WEIGHT_SCHEMES:
+            override = {'log_pump_config': _PUMP_WEIGHT_SCHEMES[cond_key]}
+        else:
+            continue  # shouldn't happen
+
+        for s in seeds:
+            configs.append({**base, **override,
+                'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'})
+
+    return configs
+
+explicit_configs = _build_grid_configs()
 
 # Previous config (kept for reference):
 # explicit_configs = [
