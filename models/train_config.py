@@ -261,6 +261,15 @@ _EXO_COND_MAP = {
 
 explicit_configs = [
     # ══════════════════════════════════════════════════════════════════
+    # 70/10/20 split — all 8 families × remaining 5 seeds (40 runs)
+    # ══════════════════════════════════════════════════════════════════
+    *[{**fam_cfg,
+       'val_split': 0.667, 'test_val_size': 0.3,
+       'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'}
+      for fam_cfg in _BEST_PER_FAMILY.values()
+      for s in _EXTEND_SEEDS],
+
+    # ══════════════════════════════════════════════════════════════════
     # Pump weight configs < 20 cm (3-seed) → remaining 5 seeds (75 runs)
     # ══════════════════════════════════════════════════════════════════
 

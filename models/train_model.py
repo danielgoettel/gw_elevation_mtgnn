@@ -30,6 +30,12 @@ import time
 import datetime
 import random
 
+try:
+    import wandb
+    WANDB_AVAILABLE = True
+except ImportError:
+    WANDB_AVAILABLE = False
+
 
 
 
@@ -326,7 +332,15 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
     
                 losses_dict["train_losses"][f"window_{future_window}"].append({"epoch": epoch + 1, "loss": train_loss})
                 losses_dict["eval_losses"][f"window_{future_window}"].append({"epoch": epoch + 1, "loss": eval_loss})
-                
+
+                if WANDB_AVAILABLE and wandb.run is not None:
+                    wandb.log({
+                        f"fw{future_window}/train_loss": train_loss,
+                        f"fw{future_window}/eval_loss": eval_loss,
+                        f"fw{future_window}/epoch": epoch + 1,
+                        "lr": optimizer.param_groups[0]['lr'],
+                    })
+
                 # Print losses every 10 epochs
                 if epoch % 10 == 9:
                     print(f"Epoch {epoch + 1}, Train Loss: {train_loss:.2e}, Eval Loss: {eval_loss:.2e}")
@@ -412,6 +426,8 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
                 es_min_epoch = config.get('node_dropout_warmup', 60) if config.get('node_dropout') else 0
                 if patience_counter >= early_stopping_patience and epoch + 1 > es_min_epoch:
                     print("Early stopping triggered.")
+                    if WANDB_AVAILABLE and wandb.run is not None:
+                        wandb.log({f"fw{future_window}/early_stop_epoch": epoch + 1})
                     break
     
                 end_time_epoch = time.time()  # End time for the current epoch
@@ -828,6 +844,16 @@ def evaluate_and_output(model, config, test_data, test_mask, df_piezo_columns, n
     print(f"\n📊 RMSE Summary by Geolayer (F_w={fw_step}):")
     print(geolayer_summary.to_string(index=False))
 
+    if WANDB_AVAILABLE and wandb.run is not None:
+        log_dict = {
+            f"test/fw{fw_step}_rmse_mean": test_rmse_mean,
+            f"test/fw{fw_step}_rmse_std": test_rmse_std,
+        }
+        for _, grp in geolayer_summary.iterrows():
+            layer = grp["geolayer"]
+            log_dict[f"test/fw{fw_step}_{layer}_mean"] = grp["RMSE Mean"]
+        wandb.log(log_dict)
+
     return test_rmse_mean, test_rmse_std, geolayer_summary, test_rmse, df_piezo_columns
 
 
@@ -910,6 +936,25 @@ def run_training_and_evaluation(config):
         run_dir = OUTPUTS_DIR / config['graph_type'] / model_base
     os.makedirs(str(run_dir), exist_ok=True)
     print(f"Run output directory: {run_dir}")
+
+    # ── W&B experiment tracking ──
+    if WANDB_AVAILABLE:
+        wandb_config = {k: v for k, v in config.items()
+                        if isinstance(v, (str, int, float, bool, list, type(None)))}
+        for nested_key in ('sp_config', 'fd_config', 'rf_config', 'exo_ablation', 'log_pump_config'):
+            if nested_key in config and isinstance(config[nested_key], dict):
+                for k, v in config[nested_key].items():
+                    wandb_config[f"{nested_key}/{k}"] = v
+        wandb_config['run_dir'] = str(run_dir)
+        wandb_config['model_base'] = model_base
+        gt_label_for_name = run_dir.parent.name if run_dir.parent.name != 'seed_experiment' else config['graph_type']
+        wandb.init(
+            project="groundwater-flow-gnn",
+            name=f"{gt_label_for_name}_s{config.get('seed', 0)}",
+            config=wandb_config,
+            tags=[config['graph_type'], f"seed_{config.get('seed', 0)}"],
+            reinit=True,
+        )
 
     # Assuming process_data.main() prepares and returns the necessary datasets and GNN data
     train_data, val_data, test_data, train_mask, val_mask, test_mask, df_piezo_columns, pump_columns, locations_no_missing, scaler, mean_gw_elevation = process_data.main(
@@ -1089,6 +1134,20 @@ def run_training_and_evaluation(config):
             scaler, A_tilde, static_features, W, device, run_dir, model_type,
             dropped_node_names, F_w)
         step_results.append((F_w, rmse_mean, rmse_std, geo_summary, per_node_rmse, piezo_cols))
+
+    # ── W&B: log best result to summary and finish ──
+    if WANDB_AVAILABLE and wandb.run is not None:
+        if step_results:
+            best_idx = min(range(len(step_results)), key=lambda k: step_results[k][1])
+            best_fw, best_rmse, best_std, best_geo, _, _ = step_results[best_idx]
+            wandb.run.summary["best_fw"] = best_fw
+            wandb.run.summary["best_rmse_mean"] = best_rmse
+            wandb.run.summary["best_rmse_std"] = best_std
+            for _, grp in best_geo.iterrows():
+                wandb.run.summary[f"best_{grp['geolayer']}_mean"] = grp["RMSE Mean"]
+        if dropped_node_names:
+            wandb.run.summary["dropped_nodes"] = dropped_node_names
+        wandb.finish()
 
     return step_results, dropped_node_names, model_base
 
