@@ -278,6 +278,20 @@ _THIEM_R15 = {
     'source': 'thiem', 'multiplier': 1.0, 'w_min': 0.1, 'w_max': 0.3, 'R': 15000,
 }
 
+# ── Coherence cutoff ablation: 3-seed exploratory runs ──
+# Current threshold ≈ 0.05 (95% significance). Tighter = fewer but stronger edges.
+# Broadband (max sub-annual): t=0.05 → 637 edges, t=0.08 → 378, t=0.10 → 283
+# 90-365d:                     t=0.05 → 526,       t=0.08 → 362, t=0.10 → 276
+# >365d:                       t=0.05 → 657,       t=0.08 → 499, t=0.10 → 432
+_COH_TIGHT_SCHEMES = {
+    'coh_t008':         {'source': 'coherence', 'band': 't008'},
+    'coh_t010':         {'source': 'coherence', 'band': 't010'},
+    'coh_90_365d_t008': {'source': 'coherence', 'band': '90_365d_t008'},
+    'coh_90_365d_t010': {'source': 'coherence', 'band': '90_365d_t010'},
+    'coh_gt365d_t008':  {'source': 'coherence', 'band': 'gt365d_t008'},
+    'coh_gt365d_t010':  {'source': 'coherence', 'band': 'gt365d_t010'},
+}
+
 # ── Fill the Family × Condition grid to 8 seeds ──
 # Missing cells identified from grid scan (42 cells, 222 runs total).
 # Cells already at 3 seeds need _EXTEND_SEEDS; cells at 0 need _SEEDS.
@@ -367,6 +381,16 @@ def _build_grid_configs():
             configs.append({**fam_cfg,
                 'log_pump_config': _THIEM_R15,
                 'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'})
+
+    # ══════════════════════════════════════════════════════════════════
+    # Coherence cutoff ablation: 3 seeds × 7 families × 6 schemes = 126 runs
+    # ══════════════════════════════════════════════════════════════════
+    for scheme_cfg in _COH_TIGHT_SCHEMES.values():
+        for fam_cfg in _PUMP_WEIGHT_FAMILIES_NO_ADAPTIVE.values():
+            for s in _THIEM_ABLATION_SEEDS:
+                configs.append({**fam_cfg,
+                    'log_pump_config': scheme_cfg,
+                    'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'})
 
     # ══════════════════════════════════════════════════════════════════
     # Split70 extension (40 runs)
