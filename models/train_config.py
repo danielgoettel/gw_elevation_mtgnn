@@ -393,10 +393,20 @@ def _build_grid_configs():
                     'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'})
 
     # ══════════════════════════════════════════════════════════════════
-    # Split70 extension (40 runs)
+    # Split70 extension — only families/seeds still incomplete
+    # default(8/8) and geolayer(8/8) done; rf needs 2048,3141 only
     # ══════════════════════════════════════════════════════════════════
-    for fam_cfg in _BEST_PER_FAMILY.values():
-        for s in _EXTEND_SEEDS:
+    _SPLIT70_REMAINING = {
+        'rf':                 [2048, 3141],
+        'feature_distance':   _EXTEND_SEEDS,
+        'sp_binary':          _EXTEND_SEEDS,
+        'sp_regis':           _EXTEND_SEEDS,
+        'mixed':              _EXTEND_SEEDS,
+        'adaptive':           _EXTEND_SEEDS,
+    }
+    for fam_key, seeds in _SPLIT70_REMAINING.items():
+        fam_cfg = _BEST_PER_FAMILY[fam_key]
+        for s in seeds:
             configs.append({**fam_cfg,
                 'val_split': 0.667, 'test_val_size': 0.3,
                 'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'})
