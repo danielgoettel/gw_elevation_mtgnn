@@ -259,6 +259,25 @@ _EXO_COND_MAP = {
         'remove_precip': True, 'remove_evap': True},
 }
 
+# ── Thiem radius ablation: 3-seed exploratory runs ──
+# The normalization was fixed to use actual r_min instead of 1m,
+# so weights now span the full [w_min, w_max] range.
+_THIEM_ABLATION_SEEDS = [42, 123, 256]
+_PUMP_WEIGHT_FAMILIES_NO_ADAPTIVE = {k: v for k, v in _BEST_PER_FAMILY.items() if k != 'adaptive'}
+
+# R=10km with fixed normalization (7 families × 3 seeds = 21 runs)
+_THIEM_R10_FIXED = {
+    'source': 'thiem', 'multiplier': 1.0, 'w_min': 0.1, 'w_max': 0.3, 'R': 10000,
+}
+# R=5km (7 families × 3 seeds = 21 runs)
+_THIEM_R5 = {
+    'source': 'thiem', 'multiplier': 1.0, 'w_min': 0.1, 'w_max': 0.3, 'R': 5000,
+}
+# R=15km (7 families × 3 seeds = 21 runs)
+_THIEM_R15 = {
+    'source': 'thiem', 'multiplier': 1.0, 'w_min': 0.1, 'w_max': 0.3, 'R': 15000,
+}
+
 # ── Fill the Family × Condition grid to 8 seeds ──
 # Missing cells identified from grid scan (42 cells, 222 runs total).
 # Cells already at 3 seeds need _EXTEND_SEEDS; cells at 0 need _SEEDS.
@@ -321,17 +340,46 @@ _GRID_FILL = {
 }
 
 def _build_grid_configs():
-    """Generate explicit_configs from _GRID_FILL + split70 extension."""
+    """Generate explicit_configs from Thiem ablation + grid fill + split70."""
     configs = []
 
+    # ══════════════════════════════════════════════════════════════════
+    # Thiem radius ablation: 3 seeds × 7 families × 3 R values = 63 runs
+    # ══════════════════════════════════════════════════════════════════
+
+    # R=10km with fixed normalization (21 runs)
+    for fam_cfg in _PUMP_WEIGHT_FAMILIES_NO_ADAPTIVE.values():
+        for s in _THIEM_ABLATION_SEEDS:
+            configs.append({**fam_cfg,
+                'log_pump_config': _THIEM_R10_FIXED,
+                'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'})
+
+    # R=5km (21 runs)
+    for fam_cfg in _PUMP_WEIGHT_FAMILIES_NO_ADAPTIVE.values():
+        for s in _THIEM_ABLATION_SEEDS:
+            configs.append({**fam_cfg,
+                'log_pump_config': _THIEM_R5,
+                'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'})
+
+    # R=15km (21 runs)
+    for fam_cfg in _PUMP_WEIGHT_FAMILIES_NO_ADAPTIVE.values():
+        for s in _THIEM_ABLATION_SEEDS:
+            configs.append({**fam_cfg,
+                'log_pump_config': _THIEM_R15,
+                'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'})
+
+    # ══════════════════════════════════════════════════════════════════
     # Split70 extension (40 runs)
+    # ══════════════════════════════════════════════════════════════════
     for fam_cfg in _BEST_PER_FAMILY.values():
         for s in _EXTEND_SEEDS:
             configs.append({**fam_cfg,
                 'val_split': 0.667, 'test_val_size': 0.3,
                 'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'})
 
-    # Grid fill
+    # ══════════════════════════════════════════════════════════════════
+    # Grid fill (222 runs)
+    # ══════════════════════════════════════════════════════════════════
     for (fam_key, cond_key), seeds in _GRID_FILL.items():
         base = {**_BEST_PER_FAMILY[fam_key]}
 

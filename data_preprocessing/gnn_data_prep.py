@@ -103,10 +103,12 @@ def compute_log_pump_weights(
 
     # ln(R/r): positive when r < R, zero/negative when r >= R
     log_influence = np.log(R / clamped_dist)
-    log_max = np.log(R / 1.0)
 
-    # Normalise to [0, 1] then scale to [w_min, w_max]
-    normed = np.clip(log_influence / log_max, 0, 1)
+    # Normalise to [0, 1] — use actual r_min so closest pump maps to w_max
+    r_min = clamped_dist[dist_array < R].min() if (dist_array < R).any() else 1.0
+    log_max = np.log(R / r_min)
+
+    normed = np.clip(log_influence / log_max, 0, 1) if log_max > 0 else np.zeros_like(log_influence)
     w = w_min + (w_max - w_min) * normed * multiplier
     w = np.clip(w, w_min, w_max)
 
