@@ -354,54 +354,21 @@ _GRID_FILL = {
 }
 
 def _build_grid_configs():
-    """Generate explicit_configs from Thiem ablation + grid fill + split70."""
+    """Generate explicit_configs from remaining incomplete runs."""
     configs = []
 
     # ══════════════════════════════════════════════════════════════════
-    # Thiem radius ablation: 3 seeds × 7 families × 3 R values = 63 runs
+    # Thiem radius ablation: COMPLETE (63/63) — removed
+    # Coherence cutoff ablation: COMPLETE (126/126) — removed
     # ══════════════════════════════════════════════════════════════════
 
-    # R=10km with fixed normalization (21 runs)
-    for fam_cfg in _PUMP_WEIGHT_FAMILIES_NO_ADAPTIVE.values():
-        for s in _THIEM_ABLATION_SEEDS:
-            configs.append({**fam_cfg,
-                'log_pump_config': _THIEM_R10_FIXED,
-                'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'})
-
-    # R=5km (21 runs)
-    for fam_cfg in _PUMP_WEIGHT_FAMILIES_NO_ADAPTIVE.values():
-        for s in _THIEM_ABLATION_SEEDS:
-            configs.append({**fam_cfg,
-                'log_pump_config': _THIEM_R5,
-                'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'})
-
-    # R=15km (21 runs)
-    for fam_cfg in _PUMP_WEIGHT_FAMILIES_NO_ADAPTIVE.values():
-        for s in _THIEM_ABLATION_SEEDS:
-            configs.append({**fam_cfg,
-                'log_pump_config': _THIEM_R15,
-                'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'})
-
     # ══════════════════════════════════════════════════════════════════
-    # Coherence cutoff ablation: 3 seeds × 7 families × 6 schemes = 126 runs
-    # ══════════════════════════════════════════════════════════════════
-    for scheme_cfg in _COH_TIGHT_SCHEMES.values():
-        for fam_cfg in _PUMP_WEIGHT_FAMILIES_NO_ADAPTIVE.values():
-            for s in _THIEM_ABLATION_SEEDS:
-                configs.append({**fam_cfg,
-                    'log_pump_config': scheme_cfg,
-                    'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'})
-
-    # ══════════════════════════════════════════════════════════════════
-    # Split70 extension — only families/seeds still incomplete
-    # default(8/8) and geolayer(8/8) done; rf needs 2048,3141 only
+    # Split70 extension — 6 remaining
+    # default(8/8), geolayer(8/8), rf(8/8), FD(8/8), SP-binary(8/8),
+    # SP-REGIS(8/8) done; mixed needs s3141; adaptive needs all 5
     # ══════════════════════════════════════════════════════════════════
     _SPLIT70_REMAINING = {
-        'rf':                 [2048, 3141],
-        'feature_distance':   _EXTEND_SEEDS,
-        'sp_binary':          _EXTEND_SEEDS,
-        'sp_regis':           _EXTEND_SEEDS,
-        'mixed':              _EXTEND_SEEDS,
+        'mixed':              [3141],
         'adaptive':           _EXTEND_SEEDS,
     }
     for fam_key, seeds in _SPLIT70_REMAINING.items():
@@ -412,7 +379,7 @@ def _build_grid_configs():
                 'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'})
 
     # ══════════════════════════════════════════════════════════════════
-    # Grid fill (222 runs)
+    # Grid fill (222 runs) — not started yet
     # ══════════════════════════════════════════════════════════════════
     for (fam_key, cond_key), seeds in _GRID_FILL.items():
         base = {**_BEST_PER_FAMILY[fam_key]}
