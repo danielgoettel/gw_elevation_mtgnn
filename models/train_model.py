@@ -1007,6 +1007,64 @@ def run_training_and_evaluation(config):
         print(f"[Exclude Nodes] Remaining piezometers: {num_piezo}")
     # ── End temp fix ──
 
+    # ── Exo ablation: remove exogenous columns from data tensors ──
+    # gnn_data_prep still builds the full adjacency (and zeros ablated edges),
+    # but we also need to drop the corresponding data columns so the input
+    # tensor matches.  After gnn_data_prep returns we slice A_tilde and
+    # static_features to the same reduced node set (see below).
+    exo_abl = config.get('exo_ablation')
+    _exo_drop_cols = []   # remember which data columns were dropped
+    if exo_abl:
+        num_piezo = len(df_piezo_columns)
+        all_cols = list(train_data.columns)
+        exo_cols = all_cols[num_piezo:]  # everything after piezometers
+
+        # Column order in data: pumps | precip | evap | rivers
+        n_pump = len(pump_columns)
+        n_river = len(locations_no_missing)
+        n_precip_evap = len(exo_cols) - n_pump - n_river
+        n_precip = n_precip_evap // 2
+        n_evap = n_precip_evap - n_precip
+
+        pump_col_names = exo_cols[:n_pump]
+        precip_col_names = exo_cols[n_pump:n_pump + n_precip]
+        evap_col_names = exo_cols[n_pump + n_precip:n_pump + n_precip + n_evap]
+        river_col_names = exo_cols[n_pump + n_precip + n_evap:]
+
+        if exo_abl.get('remove_pumps'):
+            _exo_drop_cols.extend(pump_col_names)
+        if exo_abl.get('remove_precip'):
+            _exo_drop_cols.extend(precip_col_names)
+        if exo_abl.get('remove_evap'):
+            _exo_drop_cols.extend(evap_col_names)
+        if exo_abl.get('remove_rivers'):
+            _exo_drop_cols.extend(river_col_names)
+
+        if _exo_drop_cols:
+            drop_idx = [all_cols.index(c) for c in _exo_drop_cols]
+            for df in (train_data, val_data, test_data):
+                df.drop(columns=_exo_drop_cols, inplace=True, errors='ignore')
+
+            # Rebuild scaler without dropped columns
+            from sklearn.preprocessing import MinMaxScaler
+            keep_idx = [i for i in range(scaler.n_features_in_) if i not in drop_idx]
+            new_scaler = MinMaxScaler(feature_range=(0, 1))
+            new_scaler.n_features_in_ = len(keep_idx)
+            new_scaler.data_min_ = scaler.data_min_[keep_idx]
+            new_scaler.data_max_ = scaler.data_max_[keep_idx]
+            new_scaler.data_range_ = scaler.data_range_[keep_idx]
+            new_scaler.scale_ = scaler.scale_[keep_idx]
+            new_scaler.min_ = scaler.min_[keep_idx]
+            new_scaler.feature_names_in_ = (
+                np.array([scaler.feature_names_in_[i] for i in keep_idx])
+                if hasattr(scaler, 'feature_names_in_') else None)
+            scaler = new_scaler
+
+            print(f"[Exo Ablation] Dropped {len(_exo_drop_cols)} data columns: {_exo_drop_cols}")
+            print(f"[Exo Ablation] Remaining columns: {len(train_data.columns)} "
+                  f"({len(df_piezo_columns)} piezo + {len(train_data.columns) - len(df_piezo_columns)} exo)")
+    # ── End exo ablation column drop ──
+
     if config['graph_type'] == 'mixed':
         # Build all 6 variant adjacency matrices, then let mixed selector pick per-node best
         variant_specs = [
@@ -1054,6 +1112,29 @@ def run_training_and_evaluation(config):
             exo_ablation=config.get('exo_ablation'), log_pump_config=config.get('log_pump_config'))
     else:
         A_tilde, static_features = gnn_data_prep.main(df_piezo_columns, pump_columns, locations_no_missing, config['graph_type'], config['percentage'] , config['n_piezo_connected'], config['feature_importance_multiplier'], config['n_pumps_connected'], config['weight_mode'], config['layer_constrain'], directed_graph=config.get('directed_graph', False), mean_gw_elevation=mean_gw_elevation, rf_weight_min=config.get('rf_weight_min', 0.08), rf_weight_max=config.get('rf_weight_max', 0.2), rf_vim_min=config.get('rf_vim_min', 0.01), rf_min_connections=config.get('rf_min_connections', 3), sp_config=config.get('sp_config'), fd_config=config.get('fd_config'), rf_config=config.get('rf_config'), exo_ablation=config.get('exo_ablation'), log_pump_config=config.get('log_pump_config'))
+
+    # ── Slice adjacency & static features to match reduced data columns ──
+    if _exo_drop_cols:
+        # A_tilde is (N_full, N_full), static_features is (N_full, F).
+        # We need to keep only the node indices that remain in the data.
+        n_full = A_tilde.shape[0]
+        num_piezo_tmp = len(df_piezo_columns)
+        n_pump_full = len(pump_columns)
+        # Remaining exo columns (after drop) tell us which node indices to keep
+        remaining_exo = [c for c in list(train_data.columns)[num_piezo_tmp:]]
+        # Map data column name → node index in the full adjacency
+        # Order: piezo(0..num_piezo-1) | pump | precip | evap | river
+        # We already have pump_col_names, precip_col_names, evap_col_names, river_col_names
+        full_exo_ordered = (list(pump_col_names) + list(precip_col_names)
+                            + list(evap_col_names) + list(river_col_names))
+        exo_name_to_idx = {name: num_piezo_tmp + i for i, name in enumerate(full_exo_ordered)}
+        keep_node_idx = list(range(num_piezo_tmp))  # always keep all piezometers
+        keep_node_idx += [exo_name_to_idx[c] for c in remaining_exo]
+        keep_node_idx = sorted(keep_node_idx)
+
+        A_tilde = A_tilde[keep_node_idx][:, keep_node_idx]
+        static_features = static_features[keep_node_idx]
+        print(f"[Exo Ablation] Sliced adjacency: {n_full}→{A_tilde.shape[0]} nodes")
 
     heatmap_title = (f"{config.get('model_type', 'MTGNN')} | graph={config['graph_type']} | "
                      f"weight_mode={config['weight_mode']}<br>"

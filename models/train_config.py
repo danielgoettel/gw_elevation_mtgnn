@@ -293,29 +293,24 @@ _COH_TIGHT_SCHEMES = {
 }
 
 # ── Fill the Family × Condition grid to 8 seeds ──
-# Grid fill — 29 cells, 138 runs remaining.
-# Adaptive (4 cells) and default (9 cells) complete except default coherence (3 left).
+# Grid fill — 21 cells, 120 runs remaining (80 grid + 40 adaptive exo rerun).
+# Default, FD, geolayer, mixed all complete. RF, SP-REGIS, SP-binary remain.
+# Adaptive exo ablation (5 cells × 8 seeds = 40) re-queued after bug fix.
 
 _ALL_SEEDS = [42, 123, 256, 512, 777, 1024, 2048, 3141]
 
 _GRID_FILL = {
-    # ── Adaptive: COMPLETE (32/32) — removed ──
-    # ── Default: 9 cells COMPLETE — removed ──
-    ('default', 'coherence'):                           [1024, 2048, 3141],
-    # ── FD ──
-    ('feature_distance', 'no_pumps'):                   _EXTEND_SEEDS,
-    ('feature_distance', 'no_evap_no_precip'):          _EXTEND_SEEDS,
-    ('feature_distance', 'no_evap_no_precip_no_pumps_no_rivers'): _EXTEND_SEEDS,
-    ('feature_distance', 'coherence_gt365d'):           _EXTEND_SEEDS,
-    # ── Geolayer ──
-    ('geolayer', 'no_evap_no_precip'):                  _EXTEND_SEEDS,
-    ('geolayer', 'no_evap_no_precip_no_pumps_no_rivers'): _EXTEND_SEEDS,
-    ('geolayer', 'coherence'):                          _EXTEND_SEEDS,
-    ('geolayer', 'coherence_gt365d'):                   _EXTEND_SEEDS,
-    # ── Mixed ──
-    ('mixed', 'no_evap_no_precip'):                     _EXTEND_SEEDS,
-    ('mixed', 'no_evap_no_precip_no_pumps_no_rivers'):  _EXTEND_SEEDS,
-    ('mixed', 'coherence_gt365d'):                      _EXTEND_SEEDS,
+    # ── Adaptive: pump weights COMPLETE (32/32) — removed ──
+    # ── Adaptive: exo ablation — RERUN (bug fix: now drops exo data columns) ──
+    ('adaptive', 'no_pumps'):                           _ALL_SEEDS,
+    ('adaptive', 'no_rivers'):                          _ALL_SEEDS,
+    ('adaptive', 'no_pumps_no_rivers'):                 _ALL_SEEDS,
+    ('adaptive', 'no_evap_no_precip'):                  _ALL_SEEDS,
+    ('adaptive', 'no_evap_no_precip_no_pumps_no_rivers'): _ALL_SEEDS,
+    # ── Default: COMPLETE — removed ──
+    # ── FD: COMPLETE — removed ──
+    # ── Geolayer: COMPLETE — removed ──
+    # ── Mixed: COMPLETE — removed ──
     # ── RF ──
     ('rf', 'no_evap_no_precip'):                        _EXTEND_SEEDS,
     ('rf', 'no_evap_no_precip_no_pumps_no_rivers'):     _EXTEND_SEEDS,
@@ -355,7 +350,7 @@ def _build_grid_configs():
     # ══════════════════════════════════════════════════════════════════
 
     # ══════════════════════════════════════════════════════════════════
-    # Grid fill (138 remaining)
+    # Grid fill (120 remaining: 80 grid fill + 40 adaptive exo rerun)
     # ══════════════════════════════════════════════════════════════════
     for (fam_key, cond_key), seeds in _GRID_FILL.items():
         base = {**_BEST_PER_FAMILY[fam_key]}
