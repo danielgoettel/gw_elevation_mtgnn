@@ -1489,7 +1489,31 @@ def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, perce
         lpc = log_pump_config
         source = lpc.get('source', 'thiem')
 
-        if source == 'coherence':
+        if source == 'per_station':
+            # Per-station fixed weights: assign a specific weight per pump station.
+            # lpc['station_weights'] = {'Fikkersdries': 0.3, 'Zetten': 0.1, ...}
+            station_weights = lpc['station_weights']
+
+            # Optionally apply coherence connectivity first (replaces distance-based edges)
+            if lpc.get('coherence_connectivity'):
+                coh_band = lpc.get('band')
+                if coh_band:
+                    from config import INPUT_DIR
+                    coh_file = INPUT_DIR / "wells" / f"pump_weights_coherence_{coh_band}.csv"
+                else:
+                    coh_file = PUMP_COHERENCE_WEIGHTS
+                coh_weights = compute_coherence_pump_weights(num_piezo, num_pump,
+                                                             coherence_weights_file=coh_file)
+                adj_matrix[:num_piezo, num_piezo:num_piezo + num_pump] = coh_weights
+
+            # Now override weights per station (only where connections exist)
+            pump_block = adj_matrix[:num_piezo, num_piezo:num_piezo + num_pump]
+            for j, pname in enumerate(pump_columns):
+                w = station_weights.get(pname, 0.2)
+                mask = pump_block[:, j] > 0
+                pump_block[mask, j] = w
+            adj_matrix[:num_piezo, num_piezo:num_piezo + num_pump] = pump_block
+        elif source == 'coherence':
             # Load pre-computed coherence weights (200 × 4 matrix with zeros for disconnected)
             # Optional band suffix selects a band-specific CSV (e.g. '90_365d', 'gt365d')
             band_suffix = lpc.get('band')

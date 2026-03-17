@@ -293,25 +293,19 @@ _COH_TIGHT_SCHEMES = {
 }
 
 # ── Fill the Family × Condition grid to 8 seeds ──
-# Missing cells identified from grid scan (42 cells, 222 runs total).
-# Cells already at 3 seeds need _EXTEND_SEEDS; cells at 0 need _SEEDS.
+# Grid fill — 37 cells, 197 runs remaining.
+# Adaptive exo ablation (5 cells) complete. All remaining cells need _EXTEND_SEEDS
+# except adaptive pump weights which need _ALL_SEEDS.
 
 _ALL_SEEDS = [42, 123, 256, 512, 777, 1024, 2048, 3141]
 
-# Map: (family_key, condition_key) -> seeds_needed
-# Only list cells that are NOT already at 8 seeds.
 _GRID_FILL = {
-    # ── Adaptive: exo ablation (have 3) + pump weights (have 0) ──
-    ('adaptive', 'no_pumps'):                           _EXTEND_SEEDS,
-    ('adaptive', 'no_rivers'):                          _EXTEND_SEEDS,
-    ('adaptive', 'no_pumps_no_rivers'):                 _EXTEND_SEEDS,
-    ('adaptive', 'no_evap_no_precip'):                  _EXTEND_SEEDS,
-    ('adaptive', 'no_evap_no_precip_no_pumps_no_rivers'): _EXTEND_SEEDS,
+    # ── Adaptive: pump weights only (have 0) ──
     ('adaptive', 'thiem'):                              _ALL_SEEDS,
     ('adaptive', 'coherence'):                          _ALL_SEEDS,
     ('adaptive', 'coherence_90_365d'):                  _ALL_SEEDS,
     ('adaptive', 'coherence_gt365d'):                   _ALL_SEEDS,
-    # ── Default: fill remaining ──
+    # ── Default ──
     ('default', 'no_rivers'):                           _EXTEND_SEEDS,
     ('default', 'no_pumps_no_rivers'):                  _EXTEND_SEEDS,
     ('default', 'no_evap_no_precip'):                   _EXTEND_SEEDS,
@@ -363,23 +357,41 @@ def _build_grid_configs():
     # ══════════════════════════════════════════════════════════════════
 
     # ══════════════════════════════════════════════════════════════════
-    # Split70 extension — 6 remaining
-    # default(8/8), geolayer(8/8), rf(8/8), FD(8/8), SP-binary(8/8),
-    # SP-REGIS(8/8) done; mixed needs s3141; adaptive needs all 5
+    # Per-station pump weights: Fikkersdries=0.3, Sijmons=0.2, others=0.1
+    # 7 families × 3 seeds × 2 conditions (NP=4, coherence) = 42 runs
     # ══════════════════════════════════════════════════════════════════
-    _SPLIT70_REMAINING = {
-        'mixed':              [3141],
-        'adaptive':           _EXTEND_SEEDS,
+    _PER_STATION_WEIGHTS = {
+        'source': 'per_station',
+        'station_weights': {
+            'Fikkersdries': 0.3,
+            'Sijmons': 0.2,
+            'Zetten': 0.1,
+            'Hemmen': 0.1,
+        },
     }
-    for fam_key, seeds in _SPLIT70_REMAINING.items():
-        fam_cfg = _BEST_PER_FAMILY[fam_key]
-        for s in seeds:
+
+    # With N_PUMPS=4 (all pumps connected, per-station weights)
+    for fam_key, fam_cfg in _PUMP_WEIGHT_FAMILIES_NO_ADAPTIVE.items():
+        for s in _THIEM_ABLATION_SEEDS:
             configs.append({**fam_cfg,
-                'val_split': 0.667, 'test_val_size': 0.3,
+                'n_pumps_connected': 4,
+                'log_pump_config': _PER_STATION_WEIGHTS,
+                'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'})
+
+    # With coherence connectivity + per-station weights
+    for fam_key, fam_cfg in _PUMP_WEIGHT_FAMILIES_NO_ADAPTIVE.items():
+        for s in _THIEM_ABLATION_SEEDS:
+            configs.append({**fam_cfg,
+                'log_pump_config': {**_PER_STATION_WEIGHTS,
+                    'coherence_connectivity': True},
                 'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'})
 
     # ══════════════════════════════════════════════════════════════════
-    # Grid fill (222 runs) — not started yet
+    # Split70 extension: COMPLETE — removed
+    # ══════════════════════════════════════════════════════════════════
+
+    # ══════════════════════════════════════════════════════════════════
+    # Grid fill (197 remaining of 222)
     # ══════════════════════════════════════════════════════════════════
     for (fam_key, cond_key), seeds in _GRID_FILL.items():
         base = {**_BEST_PER_FAMILY[fam_key]}
