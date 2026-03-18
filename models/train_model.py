@@ -142,7 +142,7 @@ def compute_val_rmse_per_node(model, eval_loader, device, future_window, W,
                         model, combined_input, model_type, config, device,
                         A_tilde=A_tilde, static_features=static_features,
                         current_forces=current_forces)
-                    if model_type == 'MTGNN':
+                    if model_type in ('MTGNN', 'GWNet'):
                         output = output[:, :, :num_piezo, 0]
                     predictions.append(output)
                     current_input = torch.cat((current_input[:, 1:, :], output), dim=1)
@@ -275,12 +275,12 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
                               A_tilde=A_tilde, static_features=static_features,
                               current_forces=current_forces)
 
-                          if model_type == 'MTGNN':
+                          if model_type in ('MTGNN', 'GWNet'):
                               output = output[:, :, :num_piezo, 0]
                           predictions.append(output)
                           next_input = output
                           current_input = torch.cat((current_input[:, 1:, :], next_input), dim=1)
-          
+
                       # Multi-Step loss
                       predictions = torch.cat(predictions, dim=1)
 
@@ -329,7 +329,7 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
                                   A_tilde=A_tilde, static_features=static_features,
                                   current_forces=current_forces)
 
-                              if model_type == 'MTGNN':
+                              if model_type in ('MTGNN', 'GWNet'):
                                   output = output[:, :, :num_piezo, 0]
                               predictions.append(output)
 
