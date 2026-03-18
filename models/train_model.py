@@ -274,7 +274,8 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
                           if not _debug_printed:
                               print(f"[DEBUG] combined_input: {combined_input.shape}, min={combined_input.min():.4f}, max={combined_input.max():.4f}")
                               print(f"[DEBUG] current_input: {current_input.shape}, current_forces: {current_forces.shape}")
-                              _debug_printed = True
+                              print(f"[DEBUG] target sample [0,:5,0]: {target_sequence[0,:5,0].tolist()}")
+                              print(f"[DEBUG] input sample [0,:5,0]: {input_sequence[0,:5,0].tolist()}")
 
                           output = model_forward(
                               model, combined_input, model_type, config, device,
@@ -283,6 +284,9 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
 
                           if model_type in ('MTGNN', 'GWNet'):
                               output = output[:, :, :num_piezo, 0]
+                          if not _debug_printed:
+                              print(f"[DEBUG] output sample [0,:5,0]: {output[0,:5,0].detach().tolist() if output.dim()>2 else output[0,:5].detach().tolist()}")
+                              _debug_printed = True
                           predictions.append(output)
                           next_input = output
                           current_input = torch.cat((current_input[:, 1:, :], next_input), dim=1)
