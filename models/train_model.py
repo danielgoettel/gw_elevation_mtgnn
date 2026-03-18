@@ -244,9 +244,10 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
         patience_counter = 0
         try:
         
+            _debug_printed = False
             for epoch in range(num_epochs):
                 start_time_epoch = time.time()  # Start time for the current epoch
-    
+
                 model.train()
                 total_loss = 0
         
@@ -269,6 +270,11 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
                       for t in range(future_window):
                           current_forces = external_forces_sequence[:, t : (W+t+1), :]
                           combined_input = prepare_combined_input(current_input, current_forces)
+
+                          if not _debug_printed:
+                              print(f"[DEBUG] combined_input: {combined_input.shape}, min={combined_input.min():.4f}, max={combined_input.max():.4f}")
+                              print(f"[DEBUG] current_input: {current_input.shape}, current_forces: {current_forces.shape}")
+                              _debug_printed = True
 
                           output = model_forward(
                               model, combined_input, model_type, config, device,
