@@ -355,6 +355,7 @@ def _build_grid_configs():
         'graph_type': 'default',
         'n_pumps_connected': 4,
         'node_dropout': False,
+        'blocks': 2,  # receptive field = 5, matches W+1 = 6 input length
     }
     # Static only: uses handcrafted adjacency, no learned graph
     for s in _GWN_SEEDS:
