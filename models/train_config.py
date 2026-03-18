@@ -356,6 +356,8 @@ def _build_grid_configs():
         'n_pumps_connected': 4,
         'node_dropout': False,
         'blocks': 2,  # receptive field = 5, matches W+1 = 6 input length
+        'layers': 2,  # override MTGNN's layers=4 from base config
+        'dropout': 0.3,
     }
     # Static only: uses handcrafted adjacency, no learned graph
     for s in _GWN_SEEDS:
