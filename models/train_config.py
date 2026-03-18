@@ -301,7 +301,7 @@ _ALL_SEEDS = [42, 123, 256, 512, 777, 1024, 2048, 3141]
 
 _GRID_FILL = {
     # ── RF (priority — run first) ──
-    ('rf', 'no_evap_no_precip'):                        _EXTEND_SEEDS,
+    # ('rf', 'no_evap_no_precip'):                      COMPLETE (8/8)
     ('rf', 'no_evap_no_precip_no_pumps_no_rivers'):     _EXTEND_SEEDS,
     ('rf', 'coherence_90_365d'):                        _EXTEND_SEEDS,
     ('rf', 'coherence_gt365d'):                         _EXTEND_SEEDS,
