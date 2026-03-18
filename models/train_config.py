@@ -301,10 +301,7 @@ _ALL_SEEDS = [42, 123, 256, 512, 777, 1024, 2048, 3141]
 
 _GRID_FILL = {
     # ── Adaptive: pump weights COMPLETE (32/32) — removed ──
-    # ── Adaptive: exo ablation — RERUN (bug fix: now drops exo data columns) ──
-    ('adaptive', 'no_pumps'):                           _ALL_SEEDS,
-    ('adaptive', 'no_rivers'):                          _ALL_SEEDS,
-    ('adaptive', 'no_pumps_no_rivers'):                 _ALL_SEEDS,
+    # ── Adaptive: exo ablation rerun — 3/5 COMPLETE (no_pumps, no_rivers, no_pumps_no_rivers) ──
     ('adaptive', 'no_evap_no_precip'):                  _ALL_SEEDS,
     ('adaptive', 'no_evap_no_precip_no_pumps_no_rivers'): _ALL_SEEDS,
     # ── Default: COMPLETE — removed ──
@@ -376,7 +373,7 @@ def _build_grid_configs():
             'seed': s, 'seed_experiment_name': _5R_TAG + '/gwnet'})
 
     # ══════════════════════════════════════════════════════════════════
-    # Grid fill (120 remaining: 80 grid fill + 40 adaptive exo rerun)
+    # Grid fill (96 remaining: 80 grid fill + 16 adaptive exo rerun)
     # ══════════════════════════════════════════════════════════════════
     for (fam_key, cond_key), seeds in _GRID_FILL.items():
         base = {**_BEST_PER_FAMILY[fam_key]}
