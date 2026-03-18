@@ -16,6 +16,7 @@ from data_preprocessing import process_data
 from data_preprocessing import gnn_data_prep
 from models.mtgnn import MTGNN
 from models.lstm_model import LSTMModel
+from models.gwn import gwnet
 from data_preprocessing.dataset import AutoregressiveTimeSeriesDataset
 from utils.training_utils import prepare_combined_input, make_predictions, inverse_transform_with_shape_adjustment, generate_model_filename, save_rmse_values, record_result, analyze_results, get_synthetic
 
@@ -42,12 +43,14 @@ except ImportError:
 from functools import partial
 
 
-def create_model(num_features, num_nodes, seq_length, model_type, **kwargs):
+def create_model(num_features, num_nodes, seq_length, model_type, device, supports, **kwargs):
     """Factory function to create the appropriate model based on model_type."""
     if model_type == 'MTGNN':
         return _create_mtgnn(num_features, num_nodes, seq_length, **kwargs)
     elif model_type == 'LSTM':
         return _create_lstm_model()
+    elif model_type == 'GWNet':
+        return _create_gwn_model(num_nodes, seq_length, device, supports, **kwargs)
     else:
         raise ValueError(f"Unknown model_type: {model_type}")
 
@@ -77,6 +80,24 @@ def _create_lstm_model():
     dense_output_size = 100
     return LSTMModel(input_size, hidden_size, output_size, external_forces_size, dense_output_size)
 
+def _create_gwn_model(num_nodes, seq_length, device, supports=None, **kwargs):
+    return gwnet(
+        device=device,
+        num_nodes=num_nodes,
+        dropout=kwargs.get('dropout', 0.3),
+        supports=supports,
+        gcn_bool=kwargs.get('gcn_true', True),
+        addaptadj=kwargs.get('build_adj', True),
+        in_dim=1,
+        out_dim=1,
+        residual_channels=kwargs.get('residual_channels', 32),
+        dilation_channels=kwargs.get('dilation_channels', 32),
+        skip_channels=kwargs.get('skip_channels', 256),
+        end_channels=kwargs.get('end_channels', 512),
+        kernel_size=kwargs.get('kernel_size', 2),
+        blocks=kwargs.get('blocks', 4),
+        layers=kwargs.get('layers', 2),
+    )
 
 
 def model_forward(model, combined_input, model_type, config, device,
@@ -90,6 +111,8 @@ def model_forward(model, combined_input, model_type, config, device,
             return model(combined_input, FE=static_features.to(device))
     elif model_type == 'LSTM':
         return model(combined_input, current_forces)
+    elif model_type == 'GWNet':
+        return model(combined_input)
     else:
         raise ValueError(f"Unknown model_type: {model_type}")
 
@@ -880,7 +903,9 @@ def run_training_and_evaluation(config):
     # Route runs to appropriate subfolders (seed_experiment_name takes priority)
     if config.get('seed') is not None and config.get('seed_experiment_name'):
         seed_folder = config['seed_experiment_name']
+        
         gt_label = config['graph_type']
+        
         if gt_label == 'shortest_path' and config.get('sp_config'):
             sp = config['sp_config']
             gt_label += '_' + sp.get('resistance_source', 'regis')
@@ -889,6 +914,7 @@ def run_training_and_evaluation(config):
                 gt_label += f'_s{sens}'
             if sp.get('use_hydraulic_exo'):
                 gt_label += '_hexo'
+        
         elif gt_label == 'feature_distance' and config.get('fd_config'):
             fd = config['fd_config']
             r = fd.get('radius', 0.25)
@@ -897,16 +923,32 @@ def run_training_and_evaluation(config):
                 gt_label += f'_wm{fd["weight_max"]}'.replace('.', '')
             if fd.get('pump_weight', 1.0) != 1.0 or fd.get('river_weight', 1.0) != 1.0:
                 gt_label += '_taccari'
+        
         elif gt_label == 'rf' and config.get('weight_mode') == 'cutoff' and config.get('rf_config'):
             rc = config['rf_config']
             c = rc.get('cutoff', 0.01)
             gt_label += f'_cutoff_{c}'.replace('.', '')
             if rc.get('pump_weight', 1.0) != 1.0 or rc.get('river_weight', 1.0) != 1.0:
                 gt_label += '_taccari'
-        if config.get('multi_support'):
+
+        elif config.get('model_type') == 'GWNet':
+            if config.get('gwn_adaptive_only'):
+                gt_label = 'gwnet_adaptive'
+            elif config.get('build_adj'):
+                gt_label = 'gwnet_both'
+            else:
+                gt_label = 'gwnet_static'
+
+        elif config.get('multi_support'):
             gt_label += '_multi_support'
-        if config.get('build_adj'):
+        elif config.get('build_adj'):
             gt_label = 'adaptive'
+
+        if config.get('model_type') != 'GWNet':
+            if config.get('multi_support'):
+                gt_label += '_multi_support'
+            if config.get('build_adj'):
+                gt_label = 'adaptive'
         if config.get('exo_ablation'):
             abl = config['exo_ablation']
             parts = sorted(k.replace('remove_', 'no_') for k, v in abl.items() if v)
@@ -1158,10 +1200,27 @@ def run_training_and_evaluation(config):
 
     F_w = config.get('F_w', 3)
     model_type = config.get('model_type', 'MTGNN')
+
+    # Convert A_tilde to transition matrices for GWNet
+    if model_type == 'GWNet' and not config.get('gwn_adaptive_only'):
+        
+        A_np = A_tilde.numpy() if hasattr(A_tilde, 'numpy') else np.array(A_tilde)
+        def asym_adj(adj):
+            rowsum = np.array(adj.sum(1)).flatten()
+            d_inv = np.where(rowsum > 0, 1.0 / rowsum, 0.0)
+            return np.diag(d_inv) @ adj
+        supports = [torch.tensor(asym_adj(A_np)).float().to(device),
+                    torch.tensor(asym_adj(A_np.T)).float().to(device)]
+    else:
+        supports = None
+
+
     model = create_model(
         num_features=num_features,
         num_nodes=num_nodes,
         seq_length=seq_length,
+        supports=supports,
+        device=device,
         **config
     ).to(device)
 

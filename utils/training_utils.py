@@ -58,9 +58,14 @@ def make_predictions(model, sample, device, F_w, W, A_tilde, static_features, nu
             if modeltype == 'MTGNN':
                 output = model(combined_input, A_tilde.to(device), FE=static_features.to(device)) if not build_adj else model(combined_input, FE=static_features.to(device))
                 output = output[:, :, :num_piezo, 0]
+
+            elif modeltype == 'GWNet':
+                output = model(combined_input)
+                output = output[:, :, :num_piezo, 0]
+
             else:
                 output = model(combined_input.to(device), current_forces.to(device))
-
+          
             predictions.append(output)
             next_input = output
             current_input = torch.cat((current_input[:, 1:, :], next_input), dim=1)

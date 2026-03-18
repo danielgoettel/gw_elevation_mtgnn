@@ -350,6 +350,32 @@ def _build_grid_configs():
     # ══════════════════════════════════════════════════════════════════
 
     # ══════════════════════════════════════════════════════════════════
+    # GWNet baseline: 3 modes × 3 seeds = 9 runs
+    # ══════════════════════════════════════════════════════════════════
+    _GWN_SEEDS = [42, 123, 256]
+    _GWN_BASE = {
+        'model_type': 'GWNet',
+        'graph_type': 'default',
+        'n_pumps_connected': 4,
+        'node_dropout': False,
+    }
+    # Static only: uses handcrafted adjacency, no learned graph
+    for s in _GWN_SEEDS:
+        configs.append({**_GWN_BASE,
+            'gcn_true': True, 'build_adj': False,
+            'seed': s, 'seed_experiment_name': _5R_TAG + '/gwnet'})
+    # Adaptive only: learns graph from scratch, ignores static adjacency
+    for s in _GWN_SEEDS:
+        configs.append({**_GWN_BASE,
+            'gcn_true': True, 'build_adj': True, 'gwn_adaptive_only': True,
+            'seed': s, 'seed_experiment_name': _5R_TAG + '/gwnet'})
+    # Both: static adjacency + learned adaptive (original GWNet paper mode)
+    for s in _GWN_SEEDS:
+        configs.append({**_GWN_BASE,
+            'gcn_true': True, 'build_adj': True,
+            'seed': s, 'seed_experiment_name': _5R_TAG + '/gwnet'})
+
+    # ══════════════════════════════════════════════════════════════════
     # Grid fill (120 remaining: 80 grid fill + 40 adaptive exo rerun)
     # ══════════════════════════════════════════════════════════════════
     for (fam_key, cond_key), seeds in _GRID_FILL.items():
