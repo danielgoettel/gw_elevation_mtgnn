@@ -1064,13 +1064,12 @@ def run_training_and_evaluation(config):
     # ── End temp fix ──
 
     # ── Exo ablation: remove exogenous columns from data tensors ──
-    # gnn_data_prep still builds the full adjacency (and zeros ablated edges),
-    # but we also need to drop the corresponding data columns so the input
-    # tensor matches.  After gnn_data_prep returns we slice A_tilde and
-    # static_features to the same reduced node set (see below).
+    # Only needed for adaptive (build_adj=True) models, which learn their own
+    # graph and ignore A_tilde — zeroing edges alone isn't enough.
+    # Non-adaptive families keep all 213 nodes (zeroed edges suffice).
     exo_abl = config.get('exo_ablation')
     _exo_drop_cols = []   # remember which data columns were dropped
-    if exo_abl:
+    if exo_abl and config.get('build_adj'):
         num_piezo = len(df_piezo_columns)
         all_cols = list(train_data.columns)
         exo_cols = all_cols[num_piezo:]  # everything after piezometers
