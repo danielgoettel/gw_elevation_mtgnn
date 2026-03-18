@@ -938,7 +938,9 @@ def run_training_and_evaluation(config):
                 gt_label += '_taccari'
 
         elif config.get('model_type') == 'GWNet':
-            if config.get('gwn_adaptive_only'):
+            if not config.get('gcn_true'):
+                gt_label = 'gwnet_nogcn'
+            elif config.get('gwn_adaptive_only'):
                 gt_label = 'gwnet_adaptive'
             elif config.get('build_adj'):
                 gt_label = 'gwnet_both'

@@ -360,6 +360,10 @@ def _build_grid_configs():
         'dropout': 0.3,
         'learning_rate': 0.01,
     }
+    # Diagnostic: no GCN (pure WaveNet temporal conv only), single seed
+    configs.append({**_GWN_BASE,
+        'gcn_true': False, 'build_adj': False,
+        'seed': 42, 'seed_experiment_name': _5R_TAG + '/gwnet'})
     # Static only: uses handcrafted adjacency, no learned graph
     for s in _GWN_SEEDS:
         configs.append({**_GWN_BASE,
