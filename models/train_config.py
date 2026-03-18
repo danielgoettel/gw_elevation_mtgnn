@@ -358,7 +358,7 @@ def _build_grid_configs():
         'blocks': 2,  # receptive field = 5, matches W+1 = 6 input length
         'layers': 2,  # override MTGNN's layers=4 from base config
         'dropout': 0.3,
-        'learning_rate': 0.003,
+        'learning_rate': 0.01,
     }
     # Static only: uses handcrafted adjacency, no learned graph
     for s in _GWN_SEEDS:
