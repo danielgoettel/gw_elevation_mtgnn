@@ -982,7 +982,10 @@ def run_training_and_evaluation(config):
             else:
                 m = lpc.get('multiplier', 1.0)
                 R_km = lpc.get('R', 10000) / 1000
-                gt_label += f'_pump_thiem_m{m}_R{R_km:.0f}km'
+                if lpc.get('per_station_R'):
+                    gt_label += f'_pump_thiem_m{m}_perR'
+                else:
+                    gt_label += f'_pump_thiem_m{m}_R{R_km:.0f}km'
         if config.get('val_split'):
             train_pct = int((1 - config.get('test_val_size', 0.3)) * 100)
             gt_label += f'_split{train_pct}'

@@ -435,6 +435,25 @@ def _build_grid_configs():
                 'seed': _PUMP_EXP_SEED,
                 'seed_experiment_name': _5R_TAG + '/ablation'})
 
+    # ══════════════════════════════════════════════════════════════════
+    # Thiem per-station radius: powerful pumps get larger R
+    # Fikkersdries=15km, Sijmons=12km, Hemmen/Zetten=10km (default)
+    # 1-seed exploratory (7 families × 1 seed = 7 runs)
+    # ══════════════════════════════════════════════════════════════════
+    _THIEM_PER_R = {
+        'source': 'thiem', 'multiplier': 1.0, 'w_min': 0.1, 'w_max': 0.3,
+        'R': 10000,
+        'per_station_R': {
+            'Fikkersdries': 15000,
+            'Sijmons': 12000,
+        },
+    }
+    for fam_key, fam_cfg in _PUMP_EXP_FAMILIES.items():
+        configs.append({**fam_cfg,
+            'log_pump_config': _THIEM_PER_R,
+            'seed': _PUMP_EXP_SEED,
+            'seed_experiment_name': _5R_TAG + '/ablation'})
+
     return configs
 
 explicit_configs = _build_grid_configs()

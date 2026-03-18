@@ -64,6 +64,7 @@ def compute_log_pump_weights(
     w_min=0.1,
     w_max=0.3,
     R=10000,
+    per_station_R=None,
 ):
     """
     Compute pump edge weights based on logarithmic drawdown decay (Thiem equation).
@@ -87,33 +88,46 @@ def compute_log_pump_weights(
     w_min, w_max : float
         Output weight bounds (default 0.1–0.3).
     R : float
-        Radius of influence (m).  Piezometers beyond R get weight 0
+        Default radius of influence (m).  Piezometers beyond R get weight 0
         (disconnected).  Default 10 km.
+    per_station_R : dict or None
+        Per-pump radius override, e.g. {'Fikkersdries': 15000, 'Sijmons': 12000}.
+        Pumps not listed use the default R.
 
     Returns
     -------
     weights_matrix : np.ndarray, shape (num_piezo, n_pumps)
         Full piezo × pump weight matrix. Zero = no connection.
     """
-    dist_array = pd.read_csv(pump_distances_file, header=0, index_col=0).values  # (P, 4)
+    dist_df = pd.read_csv(pump_distances_file, header=0, index_col=0)
+    pump_names = dist_df.columns.tolist()
+    dist_array = dist_df.values  # (P, 4)
     n_piezo, n_pumps = dist_array.shape
+
+    # Build per-pump R array
+    R_arr = np.full(n_pumps, float(R))
+    if per_station_R:
+        for j, pname in enumerate(pump_names):
+            if pname in per_station_R:
+                R_arr[j] = per_station_R[pname]
 
     # Thiem-style log influence for ALL pump-piezo pairs
     clamped_dist = np.clip(dist_array, 1.0, None)
 
-    # ln(R/r): positive when r < R, zero/negative when r >= R
-    log_influence = np.log(R / clamped_dist)
+    # ln(R_j/r_ij): positive when r < R_j, zero/negative when r >= R_j
+    log_influence = np.log(R_arr[None, :] / clamped_dist)
 
-    # Normalise to [0, 1] — use actual r_min so closest pump maps to w_max
-    r_min = clamped_dist[dist_array < R].min() if (dist_array < R).any() else 1.0
-    log_max = np.log(R / r_min)
+    # Normalise to [0, 1] — use actual r_min across all within-range pairs
+    within_range = dist_array < R_arr[None, :]
+    r_min = clamped_dist[within_range].min() if within_range.any() else 1.0
+    log_max = np.log(R_arr.max() / r_min)
 
     normed = np.clip(log_influence / log_max, 0, 1) if log_max > 0 else np.zeros_like(log_influence)
     w = w_min + (w_max - w_min) * normed * multiplier
     w = np.clip(w, w_min, w_max)
 
-    # Zero out piezometers beyond R (disconnected)
-    w[dist_array >= R] = 0.0
+    # Zero out piezometers beyond their pump's R
+    w[~within_range] = 0.0
 
     # Enforce n_pumps_connected limit: keep only n closest per piezo
     if n_pumps_connected < n_pumps:
@@ -123,9 +137,15 @@ def compute_log_pump_weights(
             w[i, far_pumps] = 0.0
 
     n_connected = (w > 0).sum()
-    print(f"  Thiem pump weights: R={R/1000:.0f} km, "
-          f"{n_connected}/{n_piezo * n_pumps} edges, "
-          f"range=[{w[w > 0].min():.3f}, {w[w > 0].max():.3f}]")
+    if per_station_R:
+        r_str = ', '.join(f'{p}={int(r/1000)}km' for p, r in zip(pump_names, R_arr))
+        print(f"  Thiem pump weights: per-station R=[{r_str}], "
+              f"{n_connected}/{n_piezo * n_pumps} edges, "
+              f"range=[{w[w > 0].min():.3f}, {w[w > 0].max():.3f}]")
+    else:
+        print(f"  Thiem pump weights: R={R/1000:.0f} km, "
+              f"{n_connected}/{n_piezo * n_pumps} edges, "
+              f"range=[{w[w > 0].min():.3f}, {w[w > 0].max():.3f}]")
 
     return w
 
@@ -1542,6 +1562,7 @@ def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, perce
                 w_min=lpc.get('w_min', 0.1),
                 w_max=lpc.get('w_max', 0.3),
                 R=lpc.get('R', 10000),
+                per_station_R=lpc.get('per_station_R'),
             )
             adj_matrix[:num_piezo, num_piezo:num_piezo + num_pump] = thiem_weights
 
