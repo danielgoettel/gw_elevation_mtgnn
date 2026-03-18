@@ -400,6 +400,41 @@ def _build_grid_configs():
             'gwn_tag': 'b2_lr001',
             'seed': s, 'seed_experiment_name': _5R_TAG + '/gwnet'})
 
+    # ══════════════════════════════════════════════════════════════════
+    # Pump influence experiment: 1-seed exploratory (7 families × 3 schemes = 21 runs)
+    # ══════════════════════════════════════════════════════════════════
+    _PUMP_EXP_FAMILIES = {k: v for k, v in _BEST_PER_FAMILY.items() if k != 'adaptive'}
+    _PUMP_EXP_SEED = 42
+    _PUMP_EXPERIMENTS = {
+        # Fikkersdries only → all piezometers, others disconnected
+        'fikk_only': {
+            'source': 'per_station', 'connect_all': True, 'pump_tag': 'fikk_only',
+            'station_weights': {
+                'Fikkersdries': 0.3, 'Sijmons': 0, 'Hemmen': 0, 'Zetten': 0,
+            },
+        },
+        # Fikkersdries + Sijmons → all piezometers, others disconnected
+        'fikk_sij': {
+            'source': 'per_station', 'connect_all': True, 'pump_tag': 'fikk_sij',
+            'station_weights': {
+                'Fikkersdries': 0.3, 'Sijmons': 0.2, 'Hemmen': 0, 'Zetten': 0,
+            },
+        },
+        # All pumps connected, Fikkersdries weighted highest
+        'fikk_heavy': {
+            'source': 'per_station', 'pump_tag': 'fikk_heavy',
+            'station_weights': {
+                'Fikkersdries': 0.3, 'Sijmons': 0.2, 'Hemmen': 0.1, 'Zetten': 0.1,
+            },
+        },
+    }
+    for exp_name, pump_cfg in _PUMP_EXPERIMENTS.items():
+        for fam_key, fam_cfg in _PUMP_EXP_FAMILIES.items():
+            configs.append({**fam_cfg,
+                'log_pump_config': pump_cfg,
+                'seed': _PUMP_EXP_SEED,
+                'seed_experiment_name': _5R_TAG + '/ablation'})
+
     return configs
 
 explicit_configs = _build_grid_configs()

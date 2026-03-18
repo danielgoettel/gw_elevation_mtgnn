@@ -1506,12 +1506,20 @@ def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, perce
                                                              coherence_weights_file=coh_file)
                 adj_matrix[:num_piezo, num_piezo:num_piezo + num_pump] = coh_weights
 
-            # Now override weights per station (only where connections exist)
+            # Override weights per station.
+            # connect_all=True: listed pumps connect to ALL piezometers.
+            # weight=0: disconnect that pump entirely.
+            connect_all = lpc.get('connect_all', False)
             pump_block = adj_matrix[:num_piezo, num_piezo:num_piezo + num_pump]
             for j, pname in enumerate(pump_columns):
                 w = station_weights.get(pname, 0.2)
-                mask = pump_block[:, j] > 0
-                pump_block[mask, j] = w
+                if w == 0:
+                    pump_block[:, j] = 0
+                elif connect_all:
+                    pump_block[:, j] = w
+                else:
+                    mask = pump_block[:, j] > 0
+                    pump_block[mask, j] = w
             adj_matrix[:num_piezo, num_piezo:num_piezo + num_pump] = pump_block
         elif source == 'coherence':
             # Load pre-computed coherence weights (200 × 4 matrix with zeros for disconnected)

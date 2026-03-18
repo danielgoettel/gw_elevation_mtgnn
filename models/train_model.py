@@ -970,7 +970,9 @@ def run_training_and_evaluation(config):
         if config.get('log_pump_config'):
             lpc = config['log_pump_config']
             if lpc.get('source') == 'per_station':
-                if lpc.get('coherence_connectivity'):
+                if lpc.get('pump_tag'):
+                    gt_label += f'_pump_{lpc["pump_tag"]}'
+                elif lpc.get('coherence_connectivity'):
                     gt_label += '_pump_per_station_coh'
                 else:
                     gt_label += '_pump_per_station'
