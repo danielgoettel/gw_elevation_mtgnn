@@ -359,11 +359,9 @@ def _build_grid_configs():
         'layers': 2,  # override MTGNN's layers=4 from base config
         'dropout': 0.3,
         'learning_rate': 0.01,
+        'num_epochs': 500,
+        'early_stopping_patience': 100,
     }
-    # Diagnostic: no GCN (pure WaveNet temporal conv only), single seed
-    configs.append({**_GWN_BASE,
-        'gcn_true': False, 'build_adj': False,
-        'seed': 42, 'seed_experiment_name': _5R_TAG + '/gwnet'})
     # Static only: uses handcrafted adjacency, no learned graph
     for s in _GWN_SEEDS:
         configs.append({**_GWN_BASE,
