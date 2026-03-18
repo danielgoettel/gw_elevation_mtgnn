@@ -300,19 +300,13 @@ _COH_TIGHT_SCHEMES = {
 _ALL_SEEDS = [42, 123, 256, 512, 777, 1024, 2048, 3141]
 
 _GRID_FILL = {
-    # ── Adaptive: pump weights COMPLETE (32/32) — removed ──
-    # ── Adaptive: exo ablation rerun — 3/5 COMPLETE (no_pumps, no_rivers, no_pumps_no_rivers) ──
-    ('adaptive', 'no_evap_no_precip'):                  _ALL_SEEDS,
-    ('adaptive', 'no_evap_no_precip_no_pumps_no_rivers'): _ALL_SEEDS,
-    # ── Default: COMPLETE — removed ──
-    # ── FD: COMPLETE — removed ──
-    # ── Geolayer: COMPLETE — removed ──
-    # ── Mixed: COMPLETE — removed ──
-    # ── RF ──
+    # ── RF (priority — run first) ──
     ('rf', 'no_evap_no_precip'):                        _EXTEND_SEEDS,
     ('rf', 'no_evap_no_precip_no_pumps_no_rivers'):     _EXTEND_SEEDS,
     ('rf', 'coherence_90_365d'):                        _EXTEND_SEEDS,
     ('rf', 'coherence_gt365d'):                         _EXTEND_SEEDS,
+    # ── Adaptive: exo ablation rerun — 4/5 COMPLETE ──
+    ('adaptive', 'no_evap_no_precip'):                  _ALL_SEEDS,
     # ── SP-REGIS ──
     ('sp_regis', 'no_rivers'):                          _EXTEND_SEEDS,
     ('sp_regis', 'no_pumps_no_rivers'):                 _EXTEND_SEEDS,
@@ -347,36 +341,8 @@ def _build_grid_configs():
     # ══════════════════════════════════════════════════════════════════
 
     # ══════════════════════════════════════════════════════════════════
-    # GWNet baseline: 3 modes × 3 seeds = 9 runs
+    # GWNet baseline: COMPLETE (9/9) — static, adaptive, both × 3 seeds
     # ══════════════════════════════════════════════════════════════════
-    _GWN_SEEDS = [42, 123, 256]
-    _GWN_BASE = {
-        'model_type': 'GWNet',
-        'graph_type': 'default',
-        'n_pumps_connected': 4,
-        'node_dropout': False,
-        'blocks': 2,  # receptive field = 5, matches W+1 = 6 input length
-        'layers': 2,  # override MTGNN's layers=4 from base config
-        'dropout': 0.3,
-        'learning_rate': 0.01,
-        'num_epochs': 500,
-        'early_stopping_patience': 100,
-    }
-    # Static only: uses handcrafted adjacency, no learned graph
-    for s in _GWN_SEEDS:
-        configs.append({**_GWN_BASE,
-            'gcn_true': True, 'build_adj': False,
-            'seed': s, 'seed_experiment_name': _5R_TAG + '/gwnet'})
-    # Adaptive only: learns graph from scratch, ignores static adjacency
-    for s in _GWN_SEEDS:
-        configs.append({**_GWN_BASE,
-            'gcn_true': True, 'build_adj': True, 'gwn_adaptive_only': True,
-            'seed': s, 'seed_experiment_name': _5R_TAG + '/gwnet'})
-    # Both: static adjacency + learned adaptive (original GWNet paper mode)
-    for s in _GWN_SEEDS:
-        configs.append({**_GWN_BASE,
-            'gcn_true': True, 'build_adj': True,
-            'seed': s, 'seed_experiment_name': _5R_TAG + '/gwnet'})
 
     # ══════════════════════════════════════════════════════════════════
     # Grid fill (96 remaining: 80 grid fill + 16 adaptive exo rerun)
@@ -395,6 +361,44 @@ def _build_grid_configs():
         for s in seeds:
             configs.append({**base, **override,
                 'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'})
+
+    # ══════════════════════════════════════════════════════════════════
+    # GWNet tuning: retry with original defaults (blocks=4, lr=0.001)
+    # Baseline used blocks=2, lr=0.01. Test whether deeper model + lower
+    # lr can close the gap with MTGNN (~22mm) given enough patience.
+    # ══════════════════════════════════════════════════════════════════
+    _GWN_SEEDS = [42, 123, 256]
+    _GWN_TUNE = {
+        'model_type': 'GWNet',
+        'graph_type': 'default',
+        'n_pumps_connected': 4,
+        'node_dropout': False,
+        'layers': 2,
+        'dropout': 0.3,
+        'num_epochs': 500,
+        'early_stopping_patience': 100,
+    }
+    # blocks=4, lr=0.001 (GWNet paper defaults)
+    for s in _GWN_SEEDS:
+        configs.append({**_GWN_TUNE,
+            'blocks': 4, 'learning_rate': 0.001,
+            'gcn_true': True, 'build_adj': True, 'gwn_adaptive_only': True,
+            'gwn_tag': 'b4_lr001',
+            'seed': s, 'seed_experiment_name': _5R_TAG + '/gwnet'})
+    # blocks=4, lr=0.01
+    for s in _GWN_SEEDS:
+        configs.append({**_GWN_TUNE,
+            'blocks': 4, 'learning_rate': 0.01,
+            'gcn_true': True, 'build_adj': True, 'gwn_adaptive_only': True,
+            'gwn_tag': 'b4_lr01',
+            'seed': s, 'seed_experiment_name': _5R_TAG + '/gwnet'})
+    # blocks=2, lr=0.001
+    for s in _GWN_SEEDS:
+        configs.append({**_GWN_TUNE,
+            'blocks': 2, 'learning_rate': 0.001,
+            'gcn_true': True, 'build_adj': True, 'gwn_adaptive_only': True,
+            'gwn_tag': 'b2_lr001',
+            'seed': s, 'seed_experiment_name': _5R_TAG + '/gwnet'})
 
     return configs
 

@@ -950,6 +950,8 @@ def run_training_and_evaluation(config):
                 gt_label = 'gwnet_both'
             else:
                 gt_label = 'gwnet_static'
+            if config.get('gwn_tag'):
+                gt_label += '_' + config['gwn_tag']
 
         elif config.get('multi_support'):
             gt_label += '_multi_support'
