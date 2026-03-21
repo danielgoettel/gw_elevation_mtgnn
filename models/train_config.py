@@ -454,6 +454,27 @@ def _build_grid_configs():
             'seed': 42,
             'seed_experiment_name': _5R_TAG + '/ablation'})
 
+    # ══════════════════════════════════════════════════════════════════
+    # Daily resolution: default + geolayer, n_pumps=1, seed=42
+    # 2 families × 2 variants (standard + patience=100) = 4 runs
+    # ══════════════════════════════════════════════════════════════════
+    _DAILY_BASE = {
+        'resampling_freq': 'D',
+        'n_pumps_connected': 1,
+        'node_dropout': False,
+        'seed': 42,
+        'seed_experiment_name': _5R_TAG + '/ablation',
+        'freq_tag': 'daily',
+    }
+    for fam_key in ['default', 'geolayer']:
+        fam_cfg = {**_BEST_PER_FAMILY[fam_key]}
+        # Standard patience
+        configs.append({**fam_cfg, **_DAILY_BASE})
+        # Long patience
+        configs.append({**fam_cfg, **_DAILY_BASE,
+            'early_stopping_patience': 100,
+            'patience_tag': 100})
+
     return configs
 
 explicit_configs = _build_grid_configs()

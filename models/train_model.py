@@ -986,6 +986,8 @@ def run_training_and_evaluation(config):
                     gt_label += f'_pump_thiem_m{m}_perR'
                 else:
                     gt_label += f'_pump_thiem_m{m}_R{R_km:.0f}km'
+        if config.get('freq_tag'):
+            gt_label += f'_{config["freq_tag"]}'
         if config.get('patience_tag'):
             gt_label += f'_p{config["patience_tag"]}'
         if config.get('val_split'):
