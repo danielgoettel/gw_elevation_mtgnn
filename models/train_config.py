@@ -442,6 +442,18 @@ def _build_grid_configs():
             'seed': _PUMP_EXP_SEED,
             'seed_experiment_name': _5R_TAG + '/ablation'})
 
+    # ══════════════════════════════════════════════════════════════════
+    # Long-patience baseline: 1 seed × 8 families, patience=100
+    # Tests whether MTGNN benefits from more training time (GWNet needed
+    # 200+ epochs to converge vs MTGNN's default patience=30).
+    # ══════════════════════════════════════════════════════════════════
+    for fam_key, fam_cfg in _BEST_PER_FAMILY.items():
+        configs.append({**fam_cfg,
+            'early_stopping_patience': 100,
+            'patience_tag': 100,
+            'seed': 42,
+            'seed_experiment_name': _5R_TAG + '/ablation'})
+
     return configs
 
 explicit_configs = _build_grid_configs()
