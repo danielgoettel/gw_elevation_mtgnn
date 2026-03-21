@@ -366,26 +366,14 @@ def _build_grid_configs():
         'num_epochs': 500,
         'early_stopping_patience': 100,
     }
-    # blocks=4, lr=0.001 (GWNet paper defaults)
-    for s in _GWN_SEEDS:
-        configs.append({**_GWN_TUNE,
-            'blocks': 4, 'learning_rate': 0.001,
-            'gcn_true': True, 'build_adj': True, 'gwn_adaptive_only': True,
-            'gwn_tag': 'b4_lr001',
-            'seed': s, 'seed_experiment_name': _5R_TAG + '/gwnet'})
-    # blocks=4, lr=0.01
-    for s in _GWN_SEEDS:
+    # blocks=4, lr=0.001 (GWNet paper defaults): COMPLETE (3/3) — removed
+    # blocks=2, lr=0.001: COMPLETE (3/3) — removed
+    # blocks=4, lr=0.01 — best variant, extend to 8 seeds
+    for s in _ALL_SEEDS:
         configs.append({**_GWN_TUNE,
             'blocks': 4, 'learning_rate': 0.01,
             'gcn_true': True, 'build_adj': True, 'gwn_adaptive_only': True,
             'gwn_tag': 'b4_lr01',
-            'seed': s, 'seed_experiment_name': _5R_TAG + '/gwnet'})
-    # blocks=2, lr=0.001
-    for s in _GWN_SEEDS:
-        configs.append({**_GWN_TUNE,
-            'blocks': 2, 'learning_rate': 0.001,
-            'gcn_true': True, 'build_adj': True, 'gwn_adaptive_only': True,
-            'gwn_tag': 'b2_lr001',
             'seed': s, 'seed_experiment_name': _5R_TAG + '/gwnet'})
 
     # ══════════════════════════════════════════════════════════════════
