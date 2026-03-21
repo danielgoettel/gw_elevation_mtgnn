@@ -293,34 +293,22 @@ _COH_TIGHT_SCHEMES = {
 }
 
 # ── Fill the Family × Condition grid to 8 seeds ──
-# Grid fill — 21 cells, 120 runs remaining (80 grid + 40 adaptive exo rerun).
-# Default, FD, geolayer, mixed all complete. RF, SP-REGIS, SP-binary remain.
-# Adaptive exo ablation (5 cells × 8 seeds = 40) re-queued after bug fix.
+# Grid fill — 1 cell remaining (SP-binary thiem 5 seeds).
+# RF, SP-REGIS, adaptive exo all complete. SP-binary thiem at 3/8.
 
 _ALL_SEEDS = [42, 123, 256, 512, 777, 1024, 2048, 3141]
 
 _GRID_FILL = {
-    # ── RF (priority — run first) ──
-    # ('rf', 'no_evap_no_precip'):                      COMPLETE (8/8)
-    ('rf', 'no_evap_no_precip_no_pumps_no_rivers'):     _EXTEND_SEEDS,
-    ('rf', 'coherence_90_365d'):                        _EXTEND_SEEDS,
-    ('rf', 'coherence_gt365d'):                         _EXTEND_SEEDS,
-    # ── Adaptive: exo ablation rerun — 4/5 COMPLETE ──
-    ('adaptive', 'no_evap_no_precip'):                  _ALL_SEEDS,
-    # ── SP-REGIS ──
-    ('sp_regis', 'no_rivers'):                          _EXTEND_SEEDS,
-    ('sp_regis', 'no_pumps_no_rivers'):                 _EXTEND_SEEDS,
-    ('sp_regis', 'no_evap_no_precip'):                  _EXTEND_SEEDS,
-    ('sp_regis', 'no_evap_no_precip_no_pumps_no_rivers'): _EXTEND_SEEDS,
-    ('sp_regis', 'coherence'):                          _EXTEND_SEEDS,
-    ('sp_regis', 'coherence_90_365d'):                  _EXTEND_SEEDS,
-    # ── SP-binary ──
-    ('sp_binary', 'no_rivers'):                         _EXTEND_SEEDS,
-    ('sp_binary', 'no_pumps_no_rivers'):                _EXTEND_SEEDS,
-    ('sp_binary', 'no_evap_no_precip'):                 _EXTEND_SEEDS,
-    ('sp_binary', 'no_evap_no_precip_no_pumps_no_rivers'): _EXTEND_SEEDS,
+    # ── RF: COMPLETE (4/4 cells × 8 seeds) — removed ──
+    # ── Adaptive exo: COMPLETE (5/5 cells × 8 seeds) — removed ──
+    # ── SP-REGIS: COMPLETE (6/6 cells × 8 seeds) — removed ──
+    # ── SP-binary: 5/6 cells complete ──
+    # ('sp_binary', 'no_rivers'):                        COMPLETE — removed
+    # ('sp_binary', 'no_pumps_no_rivers'):               COMPLETE — removed
+    # ('sp_binary', 'no_evap_no_precip'):                COMPLETE — removed
+    # ('sp_binary', 'no_evap_no_precip_no_pumps_no_rivers'): COMPLETE — removed
+    # ('sp_binary', 'coherence_gt365d'):                 COMPLETE — removed
     ('sp_binary', 'thiem'):                             _EXTEND_SEEDS,
-    ('sp_binary', 'coherence_gt365d'):                  _EXTEND_SEEDS,
 }
 
 def _build_grid_configs():
@@ -345,7 +333,7 @@ def _build_grid_configs():
     # ══════════════════════════════════════════════════════════════════
 
     # ══════════════════════════════════════════════════════════════════
-    # Grid fill (96 remaining: 80 grid fill + 16 adaptive exo rerun)
+    # Grid fill (5 remaining: SP-binary thiem 5 seeds)
     # ══════════════════════════════════════════════════════════════════
     for (fam_key, cond_key), seeds in _GRID_FILL.items():
         base = {**_BEST_PER_FAMILY[fam_key]}
