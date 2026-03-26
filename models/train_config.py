@@ -318,136 +318,24 @@ def _build_grid_configs():
     # ══════════════════════════════════════════════════════════════════
     # Thiem radius ablation: COMPLETE (63/63) — removed
     # Coherence cutoff ablation: COMPLETE (126/126) — removed
-    # ══════════════════════════════════════════════════════════════════
-
-    # ══════════════════════════════════════════════════════════════════
     # Per-station pump weights: COMPLETE (42/42) — removed
+    # Split70 weekly extension: COMPLETE — removed
+    # GWNet baseline: COMPLETE (9/9) — removed
+    # GWNet b4_lr01 × 8 seeds: COMPLETE — removed
+    # Grid fill SP-binary thiem × 5 seeds: COMPLETE — removed
+    # Pump influence (fikk_only/sij/heavy) × 7 families: COMPLETE — removed
+    # Thiem perR × 7 families: COMPLETE — removed
+    # Long-patience weekly × 8 families: COMPLETE — removed
     # ══════════════════════════════════════════════════════════════════
 
     # ══════════════════════════════════════════════════════════════════
-    # Split70 extension: COMPLETE — removed
-    # ══════════════════════════════════════════════════════════════════
-
-    # ══════════════════════════════════════════════════════════════════
-    # GWNet baseline: COMPLETE (9/9) — static, adaptive, both × 3 seeds
-    # ══════════════════════════════════════════════════════════════════
-
-    # ══════════════════════════════════════════════════════════════════
-    # Grid fill (5 remaining: SP-binary thiem 5 seeds)
-    # ══════════════════════════════════════════════════════════════════
-    for (fam_key, cond_key), seeds in _GRID_FILL.items():
-        base = {**_BEST_PER_FAMILY[fam_key]}
-
-        # Apply condition overrides
-        if cond_key in _EXO_COND_MAP:
-            override = {'exo_ablation': _EXO_COND_MAP[cond_key]}
-        elif cond_key in _PUMP_WEIGHT_SCHEMES:
-            override = {'log_pump_config': _PUMP_WEIGHT_SCHEMES[cond_key]}
-        else:
-            continue  # shouldn't happen
-
-        for s in seeds:
-            configs.append({**base, **override,
-                'seed': s, 'seed_experiment_name': _5R_TAG + '/ablation'})
-
-    # ══════════════════════════════════════════════════════════════════
-    # GWNet tuning: retry with original defaults (blocks=4, lr=0.001)
-    # Baseline used blocks=2, lr=0.01. Test whether deeper model + lower
-    # lr can close the gap with MTGNN (~22mm) given enough patience.
-    # ══════════════════════════════════════════════════════════════════
-    _GWN_SEEDS = [42, 123, 256]
-    _GWN_TUNE = {
-        'model_type': 'GWNet',
-        'graph_type': 'default',
-        'n_pumps_connected': 4,
-        'node_dropout': False,
-        'layers': 2,
-        'dropout': 0.3,
-        'num_epochs': 500,
-        'early_stopping_patience': 100,
-    }
-    # blocks=4, lr=0.001 (GWNet paper defaults): COMPLETE (3/3) — removed
-    # blocks=2, lr=0.001: COMPLETE (3/3) — removed
-    # blocks=4, lr=0.01 — best variant, extend to 8 seeds
-    for s in _ALL_SEEDS:
-        configs.append({**_GWN_TUNE,
-            'blocks': 4, 'learning_rate': 0.01,
-            'gcn_true': True, 'build_adj': True, 'gwn_adaptive_only': True,
-            'gwn_tag': 'b4_lr01',
-            'seed': s, 'seed_experiment_name': _5R_TAG + '/gwnet'})
-
-    # ══════════════════════════════════════════════════════════════════
-    # Pump influence experiment: 1-seed exploratory (7 families × 3 schemes = 21 runs)
-    # ══════════════════════════════════════════════════════════════════
-    _PUMP_EXP_FAMILIES = {k: v for k, v in _BEST_PER_FAMILY.items() if k != 'adaptive'}
-    _PUMP_EXP_SEED = 42
-    _PUMP_EXPERIMENTS = {
-        # Fikkersdries only → all piezometers, others disconnected
-        'fikk_only': {
-            'source': 'per_station', 'connect_all': True, 'pump_tag': 'fikk_only',
-            'station_weights': {
-                'Fikkersdries': 0.3, 'Sijmons': 0, 'Hemmen': 0, 'Zetten': 0,
-            },
-        },
-        # Fikkersdries + Sijmons → all piezometers, others disconnected
-        'fikk_sij': {
-            'source': 'per_station', 'connect_all': True, 'pump_tag': 'fikk_sij',
-            'station_weights': {
-                'Fikkersdries': 0.3, 'Sijmons': 0.2, 'Hemmen': 0, 'Zetten': 0,
-            },
-        },
-        # All pumps connected, Fikkersdries weighted highest
-        'fikk_heavy': {
-            'source': 'per_station', 'pump_tag': 'fikk_heavy',
-            'station_weights': {
-                'Fikkersdries': 0.3, 'Sijmons': 0.2, 'Hemmen': 0.1, 'Zetten': 0.1,
-            },
-        },
-    }
-    for exp_name, pump_cfg in _PUMP_EXPERIMENTS.items():
-        for fam_key, fam_cfg in _PUMP_EXP_FAMILIES.items():
-            configs.append({**fam_cfg,
-                'log_pump_config': pump_cfg,
-                'seed': _PUMP_EXP_SEED,
-                'seed_experiment_name': _5R_TAG + '/ablation'})
-
-    # ══════════════════════════════════════════════════════════════════
-    # Thiem per-station radius: powerful pumps get larger R
-    # Fikkersdries=15km, Sijmons=12km, Hemmen/Zetten=10km (default)
-    # 1-seed exploratory (7 families × 1 seed = 7 runs)
-    # ══════════════════════════════════════════════════════════════════
-    _THIEM_PER_R = {
-        'source': 'thiem', 'multiplier': 1.0, 'w_min': 0.1, 'w_max': 0.3,
-        'R': 10000,
-        'per_station_R': {
-            'Fikkersdries': 15000,
-            'Sijmons': 12000,
-        },
-    }
-    for fam_key, fam_cfg in _PUMP_EXP_FAMILIES.items():
-        configs.append({**fam_cfg,
-            'log_pump_config': _THIEM_PER_R,
-            'seed': _PUMP_EXP_SEED,
-            'seed_experiment_name': _5R_TAG + '/ablation'})
-
-    # ══════════════════════════════════════════════════════════════════
-    # Long-patience baseline: 1 seed × 8 families, patience=100
-    # Tests whether MTGNN benefits from more training time (GWNet needed
-    # 200+ epochs to converge vs MTGNN's default patience=30).
-    # ══════════════════════════════════════════════════════════════════
-    for fam_key, fam_cfg in _BEST_PER_FAMILY.items():
-        configs.append({**fam_cfg,
-            'early_stopping_patience': 100,
-            'patience_tag': 100,
-            'seed': 42,
-            'seed_experiment_name': _5R_TAG + '/ablation'})
-
-    # ══════════════════════════════════════════════════════════════════
-    # Daily resolution: all 8 families × 3 seeds, best config
-    # Single-seed exploratory (default, geolayer) already complete.
+    # Daily resolution × 3 seeds: default/geolayer/rf COMPLETE — removed
+    # Remaining 5 families: feature_distance, sp_binary, sp_regis, mixed, adaptive
     # ══════════════════════════════════════════════════════════════════
     _DAILY_SEEDS = [42, 123, 256]
-    for fam_key, fam_cfg in _BEST_PER_FAMILY.items():
+    _DAILY_REMAINING = {k: v for k, v in _BEST_PER_FAMILY.items()
+                        if k not in ('default', 'geolayer', 'rf')}
+    for fam_key, fam_cfg in _DAILY_REMAINING.items():
         for s in _DAILY_SEEDS:
             configs.append({**fam_cfg,
                 'resampling_freq': 'D',
