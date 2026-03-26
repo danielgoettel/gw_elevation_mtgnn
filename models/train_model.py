@@ -1030,7 +1030,9 @@ def run_training_and_evaluation(config):
     # Assuming process_data.main() prepares and returns the necessary datasets and GNN data
     train_data, val_data, test_data, train_mask, val_mask, test_mask, df_piezo_columns, pump_columns, locations_no_missing, scaler, mean_gw_elevation = process_data.main(
         config['synthetic_data'],
-        resampling_freq=config.get('resampling_freq', 'W')
+        resampling_freq=config.get('resampling_freq', 'W'),
+        val_split=config.get('val_split', None),
+        test_val_size=config.get('test_val_size', 0.2),
     )
     RANDOM_FOREST_TRAINING_DATA.parent.mkdir(parents=True, exist_ok=True)
     train_data.to_csv(RANDOM_FOREST_TRAINING_DATA)

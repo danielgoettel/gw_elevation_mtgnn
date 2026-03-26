@@ -378,9 +378,11 @@ def define_configuration(synthetic_data):
 
 
 
-def main(synthetic_data=False, resampling_freq='W'):
+def main(synthetic_data=False, resampling_freq='W', val_split=None, test_val_size=0.2):
     config = define_configuration(synthetic_data)
     config['resampling_freq'] = resampling_freq  # override from train_config
+    config['val_split'] = val_split
+    config['test_val_size'] = test_val_size
 
     base_data_path = PREPROCESSED_DIR
     data_path = INPUT_DIR
