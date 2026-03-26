@@ -1259,6 +1259,12 @@ def generate_feature_distance_adjacency(
     # ── 3. Map subsurface block into full adjacency matrix ──
     # Subsurface order: piezo(0..P-1), pump(P..P+Pu-1), river(P+Pu..P+Pu+R-1)
     # Full adj order:   piezo(0..P-1), pump(P..P+Pu-1), prec, evap, river(N-R..N-1)
+    # If daily data drops a river station, trim sub_adj to match num_river
+    n_sub_river = n_subsurface - num_piezo - num_pump
+    if n_sub_river > num_river:
+        keep = list(range(num_piezo + num_pump)) + list(range(num_piezo + num_pump, num_piezo + num_pump + num_river))
+        sub_adj = sub_adj[np.ix_(keep, keep)]
+
     adj_matrix = np.zeros((num_nodes, num_nodes))
 
     pump_sub_start = num_piezo
