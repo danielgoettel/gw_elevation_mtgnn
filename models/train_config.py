@@ -337,7 +337,7 @@ def _build_grid_configs():
     # 3 seeds × 8 families — test whether honest val set beats 80/20
     # val_split=0.667 of 30% temp → 20% test + 10% val + 70% train
     # ══════════════════════════════════════════════════════════════════
-    _SPLIT70_SEEDS = [42, 123, 256]
+    _SPLIT70_SEEDS = [123, 256]  # s42 COMPLETE for all 8 families
     for fam_key, fam_cfg in _BEST_PER_FAMILY.items():
         for s in _SPLIT70_SEEDS:
             configs.append({**fam_cfg,
