@@ -329,33 +329,24 @@ def _build_grid_configs():
     # ══════════════════════════════════════════════════════════════════
 
     # ══════════════════════════════════════════════════════════════════
-    # Daily resolution × 3 seeds: default/geolayer/rf COMPLETE — removed
-    # Remaining 5 families: feature_distance, sp_binary, sp_regis, mixed, adaptive
+    # Daily resolution × 3 seeds: ALL 8 families COMPLETE — removed
     # ══════════════════════════════════════════════════════════════════
-    _DAILY_SEEDS = [42, 123, 256]
-    _DAILY_REMAINING = {k: v for k, v in _BEST_PER_FAMILY.items()
-                        if k not in ('default', 'geolayer', 'rf')}
-    for fam_key, fam_cfg in _DAILY_REMAINING.items():
-        for s in _DAILY_SEEDS:
-            configs.append({**fam_cfg,
-                'resampling_freq': 'D',
-                'freq_tag': 'daily',
-                'seed': s,
-                'seed_experiment_name': _5R_TAG + '/ablation'})
 
     # ══════════════════════════════════════════════════════════════════
     # Daily 70/10/20 split: proper val set for early stopping
-    # 1 seed × 8 families — test whether honest val set beats 80/20
+    # 3 seeds × 8 families — test whether honest val set beats 80/20
     # val_split=0.667 of 30% temp → 20% test + 10% val + 70% train
     # ══════════════════════════════════════════════════════════════════
+    _SPLIT70_SEEDS = [42, 123, 256]
     for fam_key, fam_cfg in _BEST_PER_FAMILY.items():
-        configs.append({**fam_cfg,
-            'resampling_freq': 'D',
-            'freq_tag': 'daily',
-            'test_val_size': 0.3,
-            'val_split': 0.667,
-            'seed': 42,
-            'seed_experiment_name': _5R_TAG + '/ablation'})
+        for s in _SPLIT70_SEEDS:
+            configs.append({**fam_cfg,
+                'resampling_freq': 'D',
+                'freq_tag': 'daily',
+                'test_val_size': 0.3,
+                'val_split': 0.667,
+                'seed': s,
+                'seed_experiment_name': _5R_TAG + '/ablation'})
 
     return configs
 
