@@ -336,9 +336,12 @@ def _build_grid_configs():
     # Daily 70/10/20 split: proper val set for early stopping
     # 3 seeds × 8 families — test whether honest val set beats 80/20
     # val_split=0.667 of 30% temp → 20% test + 10% val + 70% train
+    # s42 COMPLETE for all 8; s123+s256 COMPLETE for default/geolayer/rf/feat_dist
     # ══════════════════════════════════════════════════════════════════
-    _SPLIT70_SEEDS = [123, 256]  # s42 COMPLETE for all 8 families
-    for fam_key, fam_cfg in _BEST_PER_FAMILY.items():
+    _SPLIT70_SEEDS = [123, 256]
+    _SPLIT70_REMAINING = {k: v for k, v in _BEST_PER_FAMILY.items()
+                          if k not in ('default', 'geolayer', 'rf', 'feature_distance')}
+    for fam_key, fam_cfg in _SPLIT70_REMAINING.items():
         for s in _SPLIT70_SEEDS:
             configs.append({**fam_cfg,
                 'resampling_freq': 'D',
