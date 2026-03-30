@@ -351,6 +351,20 @@ def _build_grid_configs():
                 'seed': s,
                 'seed_experiment_name': _5R_TAG + '/ablation'})
 
+    # ══════════════════════════════════════════════════════════════════
+    # Derivative input ablation (position + velocity + acceleration)
+    # Daily 80/20, 1 seed × 3 families — proof of concept
+    # ══════════════════════════════════════════════════════════════════
+    _DERIV_FAMILIES = {k: v for k, v in _BEST_PER_FAMILY.items()
+                       if k in ('default', 'rf', 'sp_regis')}
+    for fam_key, fam_cfg in _DERIV_FAMILIES.items():
+        configs.append({**fam_cfg,
+            'resampling_freq': 'D',
+            'freq_tag': 'daily',
+            'use_derivatives': True,
+            'seed': 42,
+            'seed_experiment_name': _5R_TAG + '/ablation'})
+
     return configs
 
 explicit_configs = _build_grid_configs()

@@ -66,7 +66,7 @@ def _create_mtgnn(num_features, num_nodes, seq_length, **kwargs):
     }}
     mtgnn_params['num_nodes'] = num_nodes
     mtgnn_params['seq_length'] = seq_length + 1
-    mtgnn_params['in_dim'] = 1
+    mtgnn_params['in_dim'] = 3 if kwargs.get('use_derivatives', False) else 1
     mtgnn_params['out_dim'] = 1
     mtgnn_params['xd'] = num_features
     return MTGNN(**mtgnn_params)
@@ -137,7 +137,8 @@ def compute_val_rmse_per_node(model, eval_loader, device, future_window, W,
                 predictions = []
                 for t in range(future_window):
                     current_forces = external_forces_sequence[:, t:(W + t + 1), :]
-                    combined_input = prepare_combined_input(current_input, current_forces)
+                    combined_input = prepare_combined_input(current_input, current_forces,
+                                                             use_derivatives=config.get('use_derivatives', False))
                     output = model_forward(
                         model, combined_input, model_type, config, device,
                         A_tilde=A_tilde, static_features=static_features,
@@ -269,7 +270,8 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
                       
                       for t in range(future_window):
                           current_forces = external_forces_sequence[:, t : (W+t+1), :]
-                          combined_input = prepare_combined_input(current_input, current_forces)
+                          combined_input = prepare_combined_input(current_input, current_forces,
+                                                             use_derivatives=config.get('use_derivatives', False))
 
                           if not _debug_printed:
                               print(f"[DEBUG] combined_input: {combined_input.shape}, min={combined_input.min():.4f}, max={combined_input.max():.4f}")
@@ -332,7 +334,8 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
                           predictions = []
                           for t in range(future_window):
                               current_forces = external_forces_sequence[:, t : (W+t + 1), :]
-                              combined_input = prepare_combined_input(current_input, current_forces)
+                              combined_input = prepare_combined_input(current_input, current_forces,
+                                                             use_derivatives=config.get('use_derivatives', False))
 
                               output = model_forward(
                                   model, combined_input, model_type, config, device,
@@ -817,7 +820,7 @@ def evaluate_and_output(model, config, test_data, test_mask, df_piezo_columns, n
     test_sample = AutoregressiveTimeSeriesDataset(test_data, input_window=W, max_future_window=100, missing_data_mask=test_mask, num_piezo=num_piezo)[1]
     test_input, test_predicted_model, test_target = make_predictions(
         model, test_sample, device, 100, W, A_tilde, static_features, num_piezo,
-        modeltype=model_type)
+        modeltype=model_type, use_derivatives=config.get('use_derivatives', False))
 
     test_predicted_model_ = inverse_transform_with_shape_adjustment(test_predicted_model.numpy(), scaler, num_piezo)
     test_input_ = inverse_transform_with_shape_adjustment(test_input.numpy(), scaler, num_piezo)
@@ -993,6 +996,8 @@ def run_training_and_evaluation(config):
         if config.get('val_split'):
             train_pct = int((1 - config.get('test_val_size', 0.3)) * 100)
             gt_label += f'_split{train_pct}'
+        if config.get('use_derivatives'):
+            gt_label += '_deriv'
         run_dir = OUTPUTS_DIR / seed_folder / gt_label / model_base
     elif config.get('multi_support'):
         run_dir = OUTPUTS_DIR / "multi_support" / model_base

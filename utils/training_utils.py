@@ -14,7 +14,8 @@ import pandas as pd
 from config import BASE_PATH, SAVED_MODELS_DIR, TRAINING_RESULTS_DIR
 
 
-def prepare_combined_input(input_seq, external_forces, modeltype='MTGNN'):
+def prepare_combined_input(input_seq, external_forces, modeltype='MTGNN',
+                           use_derivatives=False):
     # Replicate the first time step of input_seq
     first_step_replicated = input_seq[:, 0, :].unsqueeze(1)
     input_seq_padded = torch.cat([first_step_replicated, input_seq], dim=1)
@@ -25,6 +26,18 @@ def prepare_combined_input(input_seq, external_forces, modeltype='MTGNN'):
     if modeltype == 'MTGNN':
         # Reshape: (B, T, N) -> (B, 1, N, T)
         combined_input = combined_input.permute(0, 2, 1).unsqueeze(1)
+
+        if use_derivatives:
+            # Position channel: (B, 1, N, T) — already have it
+            position = combined_input
+            # Velocity: finite difference along time, left-pad to keep T
+            velocity = torch.diff(position, dim=3)
+            velocity = torch.cat([velocity[:, :, :, :1], velocity], dim=3)
+            # Acceleration: second finite difference, left-pad to keep T
+            accel = torch.diff(velocity, dim=3)
+            accel = torch.cat([accel[:, :, :, :1], accel], dim=3)
+            # Stack: (B, 3, N, T)
+            combined_input = torch.cat([position, velocity, accel], dim=1)
     else:
         combined_input = combined_input.permute(0, 2, 1).unsqueeze(2)
 
@@ -33,7 +46,8 @@ def prepare_combined_input(input_seq, external_forces, modeltype='MTGNN'):
     return combined_input.to(device)
 
 def make_predictions(model, sample, device, F_w, W, A_tilde, static_features, num_piezo,
-                     build_adj=False, modeltype='MTGNN', perturb=False, noise_level=0.01):
+                     build_adj=False, modeltype='MTGNN', perturb=False, noise_level=0.01,
+                     use_derivatives=False):
     input_sequence, external_forces, target_sequence, _ = sample
 
     # Move the data to the device (CPU or CUDA)
@@ -53,7 +67,8 @@ def make_predictions(model, sample, device, F_w, W, A_tilde, static_features, nu
     with torch.no_grad():
         for t in range(F_w):
             current_forces = current_external_forces[:, t : (W + t + 1), :]
-            combined_input = prepare_combined_input(current_input, current_forces)
+            combined_input = prepare_combined_input(current_input, current_forces,
+                                                     use_derivatives=use_derivatives)
 
             if modeltype == 'MTGNN':
                 output = model(combined_input, A_tilde.to(device), FE=static_features.to(device)) if not build_adj else model(combined_input, FE=static_features.to(device))
