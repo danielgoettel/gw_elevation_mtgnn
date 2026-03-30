@@ -18,7 +18,7 @@ from models.mtgnn import MTGNN
 from models.lstm_model import LSTMModel
 from models.gwn import gwnet
 from data_preprocessing.dataset import AutoregressiveTimeSeriesDataset
-from utils.training_utils import prepare_combined_input, make_predictions, inverse_transform_with_shape_adjustment, generate_model_filename, save_rmse_values, record_result, analyze_results, get_synthetic
+from utils.training_utils import prepare_combined_input, make_predictions, inverse_transform_with_shape_adjustment, generate_model_filename, save_rmse_values, record_result, analyze_results, get_synthetic, compute_derivative_stats
 
 from utils.metrics import calculate_rmse_per_piezometer, calculate_rmse_per_piezometer_moria, print_mean_std
 from utils.visualization import plot_sequences, plot_sparsity_pattern, plot_comparison_sequence, plot_comparison_sequence_dual_y, plot_rmse_comparison, plot_rmse_3d_network, plot_adj_heatmap
@@ -119,8 +119,9 @@ def model_forward(model, combined_input, model_type, config, device,
 
 def compute_val_rmse_per_node(model, eval_loader, device, future_window, W,
                               model_type, config, A_tilde, static_features,
-                              num_piezo):
+                              num_piezo, deriv_stats=None):
     """Compute per-node RMSE from validation batches (on scaled data)."""
+    _use_deriv = config.get('use_derivatives', False)
     model.eval()
     node_squared_errors = np.zeros(num_piezo)
     node_counts = np.zeros(num_piezo)
@@ -138,7 +139,8 @@ def compute_val_rmse_per_node(model, eval_loader, device, future_window, W,
                 for t in range(future_window):
                     current_forces = external_forces_sequence[:, t:(W + t + 1), :]
                     combined_input = prepare_combined_input(current_input, current_forces,
-                                                             use_derivatives=config.get('use_derivatives', False))
+                                                             use_derivatives=_use_deriv,
+                                                             deriv_stats=deriv_stats)
                     output = model_forward(
                         model, combined_input, model_type, config, device,
                         A_tilde=A_tilde, static_features=static_features,
@@ -164,6 +166,13 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
           F_w, W, config, model_type,
           run_dir=None, eval_callback=None):
     
+    # Derivative normalization stats (computed once from training data)
+    use_derivatives = config.get('use_derivatives', False)
+    deriv_stats = None
+    if use_derivatives:
+        deriv_stats = compute_derivative_stats(train_data.values)
+        print(f"[Derivatives] vel_std={deriv_stats['vel_std']:.6f}, accel_std={deriv_stats['accel_std']:.6f}")
+
     # Early stopping parameters
     early_stopping_patience = config.get('early_stopping_patience', 50)
     min_delta = config.get('min_delta', 0.001)
@@ -271,7 +280,8 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
                       for t in range(future_window):
                           current_forces = external_forces_sequence[:, t : (W+t+1), :]
                           combined_input = prepare_combined_input(current_input, current_forces,
-                                                             use_derivatives=config.get('use_derivatives', False))
+                                                             use_derivatives=use_derivatives,
+                                                             deriv_stats=deriv_stats)
 
                           if not _debug_printed:
                               print(f"[DEBUG] combined_input: {combined_input.shape}, min={combined_input.min():.4f}, max={combined_input.max():.4f}")
@@ -335,7 +345,8 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
                           for t in range(future_window):
                               current_forces = external_forces_sequence[:, t : (W+t + 1), :]
                               combined_input = prepare_combined_input(current_input, current_forces,
-                                                             use_derivatives=config.get('use_derivatives', False))
+                                                             use_derivatives=use_derivatives,
+                                                             deriv_stats=deriv_stats)
 
                               output = model_forward(
                                   model, combined_input, model_type, config, device,
@@ -399,7 +410,7 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
                         per_node_rmse = compute_val_rmse_per_node(
                             model, dropout_eval_loader, device, dropout_eval_steps, W,
                             model_type, config, A_tilde, static_features,
-                            num_piezo)
+                            num_piezo, deriv_stats=deriv_stats)
 
                         # Only consider nodes that are still active
                         active_mask = np.ones(num_piezo, dtype=bool)
@@ -810,7 +821,7 @@ def main(run_all=True):
 
 def evaluate_and_output(model, config, test_data, test_mask, df_piezo_columns, num_piezo,
                         scaler, A_tilde, static_features, W, device, run_dir, model_type,
-                        dropped_node_names, fw_step):
+                        dropped_node_names, fw_step, deriv_stats=None):
     """Run 100-step autoregressive test evaluation and produce all outputs for a given F_w training step."""
 
     # Create F_w-specific output subdirectory
@@ -820,7 +831,8 @@ def evaluate_and_output(model, config, test_data, test_mask, df_piezo_columns, n
     test_sample = AutoregressiveTimeSeriesDataset(test_data, input_window=W, max_future_window=100, missing_data_mask=test_mask, num_piezo=num_piezo)[1]
     test_input, test_predicted_model, test_target = make_predictions(
         model, test_sample, device, 100, W, A_tilde, static_features, num_piezo,
-        modeltype=model_type, use_derivatives=config.get('use_derivatives', False))
+        modeltype=model_type, use_derivatives=config.get('use_derivatives', False),
+        deriv_stats=deriv_stats)
 
     test_predicted_model_ = inverse_transform_with_shape_adjustment(test_predicted_model.numpy(), scaler, num_piezo)
     test_input_ = inverse_transform_with_shape_adjustment(test_input.numpy(), scaler, num_piezo)
@@ -1288,6 +1300,9 @@ def run_training_and_evaluation(config):
     # Collect results for each F_w step
     step_results = []
 
+    # Compute derivative normalization stats once (used by train + eval_callback)
+    _deriv_stats = compute_derivative_stats(train_data.values) if config.get('use_derivatives') else None
+
     dropped_node_names = train(model, optimizer, loss_function, device, num_epochs=config.get('num_epochs', 200),
           train_data=train_data, val_data=val_data, train_mask=train_mask, val_mask=val_mask,
           df_piezo_columns=df_piezo_columns, num_piezo=num_piezo, static_features=static_features,
@@ -1298,7 +1313,7 @@ def run_training_and_evaluation(config):
                   model, config, test_data, test_mask, df_piezo_columns, num_piezo,
                   scaler, A_tilde, static_features, W, device, run_dir, model_type,
                   [],
-                  fw_step))
+                  fw_step, deriv_stats=_deriv_stats))
           ))
     if dropped_node_names is None:
         dropped_node_names = []
@@ -1309,7 +1324,7 @@ def run_training_and_evaluation(config):
         rmse_mean, rmse_std, geo_summary, per_node_rmse, piezo_cols = evaluate_and_output(
             model, config, test_data, test_mask, df_piezo_columns, num_piezo,
             scaler, A_tilde, static_features, W, device, run_dir, model_type,
-            dropped_node_names, F_w)
+            dropped_node_names, F_w, deriv_stats=_deriv_stats)
         step_results.append((F_w, rmse_mean, rmse_std, geo_summary, per_node_rmse, piezo_cols))
 
     # ── W&B: log best result to summary and finish ──

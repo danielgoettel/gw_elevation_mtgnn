@@ -14,8 +14,28 @@ import pandas as pd
 from config import BASE_PATH, SAVED_MODELS_DIR, TRAINING_RESULTS_DIR
 
 
+def compute_derivative_stats(train_data_np):
+    """Compute std of velocity and acceleration from training data for normalization.
+
+    Parameters
+    ----------
+    train_data_np : ndarray (T, N)
+        MinMax-scaled training data (all node columns).
+
+    Returns
+    -------
+    dict with 'vel_std' and 'accel_std' (floats).
+    """
+    import numpy as np
+    vel = np.diff(train_data_np, axis=0)           # (T-1, N)
+    accel = np.diff(vel, axis=0)                    # (T-2, N)
+    vel_std = float(np.std(vel)) if np.std(vel) > 0 else 1.0
+    accel_std = float(np.std(accel)) if np.std(accel) > 0 else 1.0
+    return {'vel_std': vel_std, 'accel_std': accel_std}
+
+
 def prepare_combined_input(input_seq, external_forces, modeltype='MTGNN',
-                           use_derivatives=False):
+                           use_derivatives=False, deriv_stats=None):
     # Replicate the first time step of input_seq
     first_step_replicated = input_seq[:, 0, :].unsqueeze(1)
     input_seq_padded = torch.cat([first_step_replicated, input_seq], dim=1)
@@ -36,6 +56,10 @@ def prepare_combined_input(input_seq, external_forces, modeltype='MTGNN',
             # Acceleration: second finite difference, left-pad to keep T
             accel = torch.diff(velocity, dim=3)
             accel = torch.cat([accel[:, :, :, :1], accel], dim=3)
+            # Normalize so all 3 channels are on similar scale
+            if deriv_stats is not None:
+                velocity = velocity / deriv_stats['vel_std']
+                accel = accel / deriv_stats['accel_std']
             # Stack: (B, 3, N, T)
             combined_input = torch.cat([position, velocity, accel], dim=1)
     else:
@@ -47,7 +71,7 @@ def prepare_combined_input(input_seq, external_forces, modeltype='MTGNN',
 
 def make_predictions(model, sample, device, F_w, W, A_tilde, static_features, num_piezo,
                      build_adj=False, modeltype='MTGNN', perturb=False, noise_level=0.01,
-                     use_derivatives=False):
+                     use_derivatives=False, deriv_stats=None):
     input_sequence, external_forces, target_sequence, _ = sample
 
     # Move the data to the device (CPU or CUDA)
@@ -68,7 +92,8 @@ def make_predictions(model, sample, device, F_w, W, A_tilde, static_features, nu
         for t in range(F_w):
             current_forces = current_external_forces[:, t : (W + t + 1), :]
             combined_input = prepare_combined_input(current_input, current_forces,
-                                                     use_derivatives=use_derivatives)
+                                                     use_derivatives=use_derivatives,
+                                                     deriv_stats=deriv_stats)
 
             if modeltype == 'MTGNN':
                 output = model(combined_input, A_tilde.to(device), FE=static_features.to(device)) if not build_adj else model(combined_input, FE=static_features.to(device))
