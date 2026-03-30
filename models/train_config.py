@@ -350,6 +350,21 @@ def _build_grid_configs():
             'seed': 42,
             'seed_experiment_name': _5R_TAG + '/ablation'})
 
+    # ══════════════════════════════════════════════════════════════════
+    # F_w=6 extension: weekly, 8 families × 3 seeds
+    # Existing fw1-3 checkpoints will be loaded and skipped;
+    # only fw4, fw5, fw6 will be trained.
+    # fw_label=3 keeps directory name as MTGNN_fw3_... to find checkpoints.
+    # ══════════════════════════════════════════════════════════════════
+    _FW6_SEEDS = [42, 123, 256]
+    for fam_key, fam_cfg in _BEST_PER_FAMILY.items():
+        for s in _FW6_SEEDS:
+            configs.append({**fam_cfg,
+                'F_w': 6,
+                'fw_label': 3,
+                'seed': s,
+                'seed_experiment_name': _5R_TAG})
+
     return configs
 
 explicit_configs = _build_grid_configs()
