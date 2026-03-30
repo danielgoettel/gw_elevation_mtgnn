@@ -337,21 +337,12 @@ def _build_grid_configs():
     # ══════════════════════════════════════════════════════════════════
 
     # ══════════════════════════════════════════════════════════════════
-    # Derivative input ablation (position + velocity + acceleration)
-    # Daily 80/20, 1 seed × 3 families — proof of concept
+    # Derivative input ablation: COMPLETE — worse than baseline, removed
+    # F_w=6 weekly extension: COMPLETE (8 families × 3 seeds) — removed
     # ══════════════════════════════════════════════════════════════════
-    _DERIV_FAMILIES = {k: v for k, v in _BEST_PER_FAMILY.items()
-                       if k in ('default', 'rf', 'sp_regis')}
-    for fam_key, fam_cfg in _DERIV_FAMILIES.items():
-        configs.append({**fam_cfg,
-            'resampling_freq': 'D',
-            'freq_tag': 'daily',
-            'use_derivatives': True,
-            'seed': 42,
-            'seed_experiment_name': _5R_TAG + '/ablation'})
 
     # ══════════════════════════════════════════════════════════════════
-    # F_w=6 extension: weekly, 8 families × 3 seeds
+    # F_w=6 extension: daily, 8 families × 3 seeds
     # Existing fw1-3 checkpoints will be loaded and skipped;
     # only fw4, fw5, fw6 will be trained.
     # fw_label=3 keeps directory name as MTGNN_fw3_... to find checkpoints.
@@ -360,10 +351,12 @@ def _build_grid_configs():
     for fam_key, fam_cfg in _BEST_PER_FAMILY.items():
         for s in _FW6_SEEDS:
             configs.append({**fam_cfg,
+                'resampling_freq': 'D',
+                'freq_tag': 'daily',
                 'F_w': 6,
                 'fw_label': 3,
                 'seed': s,
-                'seed_experiment_name': _5R_TAG})
+                'seed_experiment_name': _5R_TAG + '/ablation'})
 
     return configs
 
