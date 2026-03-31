@@ -441,6 +441,10 @@ def main(synthetic_data=False, resampling_freq='W', val_split=None, test_val_siz
     exclude_locations = ['Driel beneden', 'Driel boven', 'Arnhem']
     df_river = df_river.drop(columns=exclude_locations, errors='ignore')
 
+    # Forward-fill then back-fill small gaps so daily resampling doesn't
+    # drop river stations that are complete at weekly resolution.
+    df_river = df_river.ffill().bfill()
+
     # Count the missing data for each location
     missing_counts = df_river.isna().sum()
     locations_no_missing = missing_counts[missing_counts == 0].index
