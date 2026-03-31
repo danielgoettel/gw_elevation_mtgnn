@@ -338,18 +338,31 @@ def _build_grid_configs():
 
     # ══════════════════════════════════════════════════════════════════
     # Derivative input ablation: COMPLETE — worse than baseline, removed
-    # F_w=6 weekly extension: COMPLETE (8 families × 3 seeds) — removed
     # ══════════════════════════════════════════════════════════════════
 
+    _ALL_SEEDS = [42, 123, 256, 512, 777, 1024, 2048, 3141]
+
     # ══════════════════════════════════════════════════════════════════
-    # F_w=6 extension: daily, 8 families × 3 seeds
-    # Existing fw1-3 checkpoints will be loaded and skipped;
-    # only fw4, fw5, fw6 will be trained.
+    # F_w=6 weekly extension: 8 families × 8 seeds
+    # s42/s123/s256 COMPLETE — remaining 5 seeds
     # fw_label=3 keeps directory name as MTGNN_fw3_... to find checkpoints.
     # ══════════════════════════════════════════════════════════════════
-    _FW6_SEEDS = [42, 123, 256]
+    _FW6_WEEKLY_REMAINING = [512, 777, 1024, 2048, 3141]
     for fam_key, fam_cfg in _BEST_PER_FAMILY.items():
-        for s in _FW6_SEEDS:
+        for s in _FW6_WEEKLY_REMAINING:
+            configs.append({**fam_cfg,
+                'F_w': 6,
+                'fw_label': 3,
+                'seed': s,
+                'seed_experiment_name': _5R_TAG})
+
+    # ══════════════════════════════════════════════════════════════════
+    # F_w=6 daily extension: 8 families × 8 seeds
+    # Some fw1-3 checkpoints exist (will be skipped), rest train from scratch.
+    # fw_label=3 keeps directory name as MTGNN_fw3_... to find checkpoints.
+    # ══════════════════════════════════════════════════════════════════
+    for fam_key, fam_cfg in _BEST_PER_FAMILY.items():
+        for s in _ALL_SEEDS:
             configs.append({**fam_cfg,
                 'resampling_freq': 'D',
                 'freq_tag': 'daily',
