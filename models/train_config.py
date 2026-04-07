@@ -43,10 +43,9 @@ def define_base_configuration():
         'min_delta': 0.001,
         'scheduler_patience': 10,
 
-        # Data split — set val_split to enable a true validation set
-        # None → val = test (legacy 80/20); 0.667 + test_val_size=0.3 → 70/10/20
-        'test_val_size': 0.2,
-        'val_split': None,
+        # Data split — 70/10/20 train/val/test
+        'test_val_size': 0.3,
+        'val_split': 0.667,
 
         # Directed graph — piezo-piezo edges flow from higher to lower GW elevation
         'directed_graph': False,
