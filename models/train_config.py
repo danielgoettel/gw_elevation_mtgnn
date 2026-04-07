@@ -351,16 +351,17 @@ def _build_grid_configs():
     # ══════════════════════════════════════════════════════════════════
     # ══════════════════════════════════════════════════════════════════
     # One-way exogenous: exo → piezo only (no signal relay through exo)
-    # Default base config × 3 seeds, weekly
-    # Output folder: default_oneway_exo/
+    # All 8 graph families × 3 seeds, weekly
+    # Output folder: {graph_type}_oneway_exo/
     # ══════════════════════════════════════════════════════════════════
-    for s in [42, 123, 256]:
-        configs.append({
-            **_BEST_PER_FAMILY['default'],
-            'one_way_exo': True,
-            'seed': s,
-            'seed_experiment_name': _5R_TAG,
-        })
+    for fam_key, fam_cfg in _BEST_PER_FAMILY.items():
+        for s in [42, 123, 256]:
+            configs.append({
+                **fam_cfg,
+                'one_way_exo': True,
+                'seed': s,
+                'seed_experiment_name': _5R_TAG,
+            })
 
     return configs
 
