@@ -335,13 +335,13 @@ def generate_complex_adjacency_matrix(all_coords, num_piezo, num_pump, num_prec,
             for pump_col_idx in pump_indices:
                 adj_matrix[i, pump_col_idx] = 0.2
 
-            # Connect to the closest precipitation
-            prec_index = num_piezo + num_pump + np.argmin(dist_matrix[i, num_piezo + num_pump:num_piezo + num_pump + num_prec])
-            adj_matrix[i, prec_index] = 0.3
+            # Connect to ALL precipitation stations
+            for p in range(num_prec):
+                adj_matrix[i, num_piezo + num_pump + p] = 0.3
 
-            # Connect to the closest evaporation
-            evap_index = num_piezo + num_pump + num_prec + np.argmin(dist_matrix[i, num_piezo + num_pump + num_prec:num_piezo + num_pump + num_prec + num_evap])
-            adj_matrix[i, evap_index] = 0.4
+            # Connect to ALL evaporation stations
+            for e in range(num_evap):
+                adj_matrix[i, num_piezo + num_pump + num_prec + e] = 0.4
 
             # Connect to the two closest rivers
             river_indices = np.argsort(dist_matrix[i, -num_river:])[:2] + (num_nodes - num_river)
@@ -619,13 +619,13 @@ def generate_rf_adjacency_fixed(
 
         if num_prec > 0:
             prec_start = num_piezo + num_pump
-            prec_idx = prec_start + np.argmin(dist[prec_start:prec_start + num_prec])
-            adj_matrix[i, prec_idx] = 0.3
+            for p in range(num_prec):
+                adj_matrix[i, prec_start + p] = 0.3
 
         if num_evap > 0:
             evap_start = num_piezo + num_pump + num_prec
-            evap_idx = evap_start + np.argmin(dist[evap_start:evap_start + num_evap])
-            adj_matrix[i, evap_idx] = 0.4
+            for e in range(num_evap):
+                adj_matrix[i, evap_start + e] = 0.4
 
         if num_river > 0:
             river_start = num_nodes - num_river
@@ -724,11 +724,11 @@ def generate_rf_cutoff_adjacency(
     evap_start = prec_start + num_prec
     for i in range(num_piezo):
         if num_prec > 0:
-            prec_idx = prec_start + np.argmin(dist_matrix[i, prec_start:prec_start + num_prec])
-            adj[i, prec_idx] = 0.3
+            for p in range(num_prec):
+                adj[i, prec_start + p] = 0.3
         if num_evap > 0:
-            evap_idx = evap_start + np.argmin(dist_matrix[i, evap_start:evap_start + num_evap])
-            adj[i, evap_idx] = 0.4
+            for e in range(num_evap):
+                adj[i, evap_start + e] = 0.4
 
     # ── 6. Symmetrise ──
     adj = np.maximum(adj, adj.T)
@@ -836,15 +836,15 @@ def generate_rf_adjacency_variable(
 
         dist = np.linalg.norm(all_coords[i] - all_coords, axis=1)
 
-        # Precipitation
+        # Precipitation (connect to all)
         if num_prec > 0:
-            prec_idx = start_prec + np.argmin(dist[start_prec:start_prec + num_prec])
-            adj_matrix[i, prec_idx] = 0.3
+            for p in range(num_prec):
+                adj_matrix[i, start_prec + p] = 0.3
 
-        # Evaporation
+        # Evaporation (connect to all)
         if num_evap > 0:
-            evap_idx = start_evap + np.argmin(dist[start_evap:start_evap + num_evap])
-            adj_matrix[i, evap_idx] = 0.4
+            for e in range(num_evap):
+                adj_matrix[i, start_evap + e] = 0.4
 
         # Rivers (two closest)
         if num_river > 0:
@@ -946,15 +946,15 @@ def generate_rf_full_vim_matrix(
         pump_idxs = np.array(closest_pumps[i], dtype=int)
         adj[i, pump_idxs] = 0.2
 
-        # Precipitation
+        # Precipitation (connect to all)
         if num_prec > 0:
-            prec_idx = start_prec + np.argmin(dmat[i, start_prec:start_prec + num_prec])
-            adj[i, prec_idx] = 0.3
+            for p in range(num_prec):
+                adj[i, start_prec + p] = 0.3
 
-        # Evaporation
+        # Evaporation (connect to all)
         if num_evap > 0:
-            evap_idx = start_evap + np.argmin(dmat[i, start_evap:start_evap + num_evap])
-            adj[i, evap_idx] = 0.4
+            for e in range(num_evap):
+                adj[i, start_evap + e] = 0.4
 
         # Rivers (two closest)
         if num_river > 0:
