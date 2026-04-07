@@ -340,16 +340,6 @@ def _build_grid_configs():
             'seed_experiment_name': _OUTPUT_TAG,
         })
 
-    # One-way exogenous: all graph families
-    for fam_key, fam_cfg in _BEST_PER_FAMILY.items():
-        configs.append({
-            **fam_cfg,
-            'legacy_scaling': True,
-            'one_way_exo': True,
-            'seed': _SEED,
-            'seed_experiment_name': _OUTPUT_TAG,
-        })
-
     # Pump connectivity ablation: default & geolayer × n_pumps 1-4
     for gt in ['default', 'geolayer']:
         for n_pumps in [1, 2, 3, 4]:
@@ -381,6 +371,10 @@ def _build_grid_configs():
         'seed': _SEED,
         'seed_experiment_name': _OUTPUT_TAG,
     })
+
+    # Apply one_way_exo to ALL runs
+    for c in configs:
+        c['one_way_exo'] = True
 
     return configs
 
