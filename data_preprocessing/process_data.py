@@ -242,14 +242,18 @@ def fix_known_data_issues(df):
                 print(f"  Datum shift fix: {col} — shifted {bad_mask.sum()} "
                       f"values by +{offset:.0f} cm")
 
-    # ── B40A0400-001: two bad points 2019-12-18 and 2019-12-19 ──
+    # ── B40A0400-001: bad period 2019-12-18 to 2020-02-03 ──
+    # Sensor drops on 12/18, original preprocessing interpolated linearly through
+    # the gap. Real data resumes ~2020-02-04. Replace entire period with NaN.
     col = 'B40A0400-001'
     if col in df.columns:
-        bad_dates = pd.to_datetime(['2019-12-18', '2019-12-19'])
-        mask = df.index.isin(bad_dates)
-        if mask.any():
-            df.loc[mask, col] = np.nan
-            print(f"  Spike removal: {col} — removed {mask.sum()} bad points (2019-12-18/19)")
+        bad_start = pd.Timestamp('2019-12-18')
+        bad_end = pd.Timestamp('2020-02-03')
+        bad_mask = (df.index >= bad_start) & (df.index <= bad_end)
+        if bad_mask.any():
+            df.loc[bad_mask, col] = np.nan
+            print(f"  Bad period removal: {col} — removed {bad_mask.sum()} "
+                  f"values ({bad_start.date()} to {bad_end.date()})")
 
     # ── B40A0534-001: sensor drift 2009-10-05 to 2010-02-03 ──
     # Drops ~115 cm over a week then stays low for 4 months before snapping back.
