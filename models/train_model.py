@@ -1012,6 +1012,8 @@ def run_training_and_evaluation(config):
             gt_label += f'_split{train_pct}'
         if config.get('use_derivatives'):
             gt_label += '_deriv'
+        if config.get('one_way_exo'):
+            gt_label += '_oneway_exo'
         run_dir = OUTPUTS_DIR / seed_folder / gt_label / model_base
     elif config.get('multi_support'):
         run_dir = OUTPUTS_DIR / "multi_support" / model_base
@@ -1194,9 +1196,11 @@ def run_training_and_evaluation(config):
             mean_gw_elevation=mean_gw_elevation,
             rmse_table_path=rmse_table_path,
             variant_graph_paths=variant_adj,
-            exo_ablation=config.get('exo_ablation'), log_pump_config=config.get('log_pump_config'))
+            exo_ablation=config.get('exo_ablation'), log_pump_config=config.get('log_pump_config'),
+            one_way_exo=config.get('one_way_exo', False))
     else:
-        A_tilde, static_features = gnn_data_prep.main(df_piezo_columns, pump_columns, locations_no_missing, config['graph_type'], config['percentage'] , config['n_piezo_connected'], config['feature_importance_multiplier'], config['n_pumps_connected'], config['weight_mode'], config['layer_constrain'], directed_graph=config.get('directed_graph', False), mean_gw_elevation=mean_gw_elevation, rf_weight_min=config.get('rf_weight_min', 0.08), rf_weight_max=config.get('rf_weight_max', 0.2), rf_vim_min=config.get('rf_vim_min', 0.01), rf_min_connections=config.get('rf_min_connections', 3), sp_config=config.get('sp_config'), fd_config=config.get('fd_config'), rf_config=config.get('rf_config'), exo_ablation=config.get('exo_ablation'), log_pump_config=config.get('log_pump_config'))
+        A_tilde, static_features = gnn_data_prep.main(df_piezo_columns, pump_columns, locations_no_missing, config['graph_type'], config['percentage'] , config['n_piezo_connected'], config['feature_importance_multiplier'], config['n_pumps_connected'], config['weight_mode'], config['layer_constrain'], directed_graph=config.get('directed_graph', False), mean_gw_elevation=mean_gw_elevation, rf_weight_min=config.get('rf_weight_min', 0.08), rf_weight_max=config.get('rf_weight_max', 0.2), rf_vim_min=config.get('rf_vim_min', 0.01), rf_min_connections=config.get('rf_min_connections', 3), sp_config=config.get('sp_config'), fd_config=config.get('fd_config'), rf_config=config.get('rf_config'), exo_ablation=config.get('exo_ablation'), log_pump_config=config.get('log_pump_config'),
+            one_way_exo=config.get('one_way_exo', False))
 
     # ── Slice adjacency & static features to match reduced data columns ──
     if _exo_drop_cols:

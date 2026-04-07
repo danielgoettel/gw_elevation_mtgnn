@@ -350,19 +350,14 @@ def _build_grid_configs():
     # fw_label=3 keeps directory name as MTGNN_fw3_... to find checkpoints.
     # ══════════════════════════════════════════════════════════════════
     # ══════════════════════════════════════════════════════════════════
-    # Prebuilt adjacency: exo_2km_depth75 rule (river/pump edges only
-    # for piezometers within 2 km of river/pump AND screen > -75 m NAP)
+    # One-way exogenous: exo → piezo only (no signal relay through exo)
     # Default base config × 3 seeds, weekly
+    # Output folder: default_oneway_exo/
     # ══════════════════════════════════════════════════════════════════
-    from config import GENERATED_GRAPHS
-    _PREBUILT_ADJ = str(Path(GENERATED_GRAPHS) /
-                        'adj_default_WM_fixed_piezo_3_pumps_1_exo_2km_depth75.npy')
     for s in [42, 123, 256]:
         configs.append({
-            'graph_type': 'prebuilt',
-            'sp_config': {'prebuilt_path': _PREBUILT_ADJ},
-            'n_pumps_connected': 1,
-            'node_dropout': False,
+            **_BEST_PER_FAMILY['default'],
+            'one_way_exo': True,
             'seed': s,
             'seed_experiment_name': _5R_TAG,
         })

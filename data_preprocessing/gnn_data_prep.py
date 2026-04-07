@@ -1375,7 +1375,7 @@ def generate_mixed_optimal_adjacency(rmse_table_path, variant_adj_matrices, num_
     return mixed_adj, best_variant_per_node
 
 
-def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, percentage=None, n_piezo_connected=3, feature_importance_multiplier = None, n_pumps_connected = 4, weight_mode = 'fixed', same_layer = False, directed_graph=False, mean_gw_elevation=None, rf_weight_min=0.08, rf_weight_max=0.2, rf_vim_min=0.01, rf_min_connections=3, rmse_table_path=None, variant_graph_paths=None, sp_config=None, fd_config=None, rf_config=None, exo_ablation=None, log_pump_config=None):
+def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, percentage=None, n_piezo_connected=3, feature_importance_multiplier = None, n_pumps_connected = 4, weight_mode = 'fixed', same_layer = False, directed_graph=False, mean_gw_elevation=None, rf_weight_min=0.08, rf_weight_max=0.2, rf_vim_min=0.01, rf_min_connections=3, rmse_table_path=None, variant_graph_paths=None, sp_config=None, fd_config=None, rf_config=None, exo_ablation=None, log_pump_config=None, one_way_exo=False):
     # Paths to the metadata files (update these paths according to your folder structure)
 
     metadata_path = PIEZO_METADATA
@@ -1616,6 +1616,18 @@ def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, perce
 
         remaining = np.count_nonzero(adj_matrix)
         print(f"  Exo ablation: {remaining} non-zero entries remaining")
+
+    # ── One-way exogenous: exo → piezo only (prevent piezo signal relaying through exo nodes) ──
+    if one_way_exo:
+        exo_start = num_piezo
+        before_nnz = np.count_nonzero(adj_matrix)
+        # Zero out exo←piezo edges (exo rows, piezo cols): prevents piezo signal flowing into exo nodes
+        adj_matrix[exo_start:, :num_piezo] = 0
+        # Zero out exo←exo edges: prevents exo nodes relaying through each other
+        adj_matrix[exo_start:, exo_start:] = 0
+        after_nnz = np.count_nonzero(adj_matrix)
+        print(f"  One-way exo: removed {before_nnz - after_nnz} reverse/exo-exo edges "
+              f"({before_nnz} → {after_nnz} non-zero)")
 
     # Apply directional mask: keep piezo-piezo edges only from higher to lower GW elevation
     if directed_graph and mean_gw_elevation is not None:
