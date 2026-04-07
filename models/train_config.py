@@ -37,7 +37,7 @@ def define_base_configuration():
         'learning_rate': 0.001,
         'num_epochs': 200,
         'batch_size': 32,
-        'F_w': 6,
+        'F_w': 3,
         'model_type': 'MTGNN',  # Options: 'MTGNN', 'LSTM'
         'early_stopping_patience': 30,
         'min_delta': 0.001,
