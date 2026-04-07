@@ -37,7 +37,7 @@ def define_base_configuration():
         'learning_rate': 0.001,
         'num_epochs': 200,
         'batch_size': 32,
-        'F_w': 3,
+        'F_w': 6,
         'model_type': 'MTGNN',  # Options: 'MTGNN', 'LSTM'
         'early_stopping_patience': 30,
         'min_delta': 0.001,
@@ -314,48 +314,56 @@ def _build_grid_configs():
     configs = []
 
     _ALL_SEEDS = [42, 123, 256, 512, 777, 1024, 2048, 3141]
-    _BASELINE_SEEDS = [42, 123, 256]
+    _SEED = 42
 
     # ══════════════════════════════════════════════════════════════════
-    # v3 Baseline: all 8 graph families × 3 seeds, weekly
+    # v3 Baseline: all 8 graph families × 1 seed, weekly
     # Bug fixes: pump ordering, precip/evap connectivity, per-type scaling
     # ══════════════════════════════════════════════════════════════════
     for fam_key, fam_cfg in _BEST_PER_FAMILY.items():
-        for s in _BASELINE_SEEDS:
-            configs.append({
-                **fam_cfg,
-                'seed': s,
-                'seed_experiment_name': _OUTPUT_TAG,
-            })
+        configs.append({
+            **fam_cfg,
+            'seed': _SEED,
+            'seed_experiment_name': _OUTPUT_TAG,
+        })
 
     # ══════════════════════════════════════════════════════════════════
     # One-way exogenous: exo → piezo only (no signal relay through exo)
-    # All 8 graph families × 3 seeds, weekly
+    # All 8 graph families × 1 seed, weekly
     # ══════════════════════════════════════════════════════════════════
     for fam_key, fam_cfg in _BEST_PER_FAMILY.items():
-        for s in _BASELINE_SEEDS:
+        configs.append({
+            **fam_cfg,
+            'one_way_exo': True,
+            'seed': _SEED,
+            'seed_experiment_name': _OUTPUT_TAG,
+        })
+
+    # ══════════════════════════════════════════════════════════════════
+    # Pump connectivity ablation: default & geolayer × n_pumps 1-4 × 1 seed
+    # ══════════════════════════════════════════════════════════════════
+    for gt in ['default', 'geolayer']:
+        for n_pumps in [1, 2, 3, 4]:
             configs.append({
-                **fam_cfg,
-                'one_way_exo': True,
-                'seed': s,
+                'graph_type': gt,
+                'n_pumps_connected': n_pumps,
+                'node_dropout': False,
+                'seed': _SEED,
                 'seed_experiment_name': _OUTPUT_TAG,
             })
 
     # ══════════════════════════════════════════════════════════════════
-    # Pump connectivity ablation: default & geolayer × n_pumps 1-4 × 3 seeds
-    # (n_pumps=1 for default and n_pumps=3 for geolayer already in baseline,
-    #  but included here for completeness in a single comparison)
+    # Piezo connectivity ablation: default, geolayer, rf × n_piezo 4,5,6 × 1 seed
+    # (n_piezo=3 is the baseline default)
     # ══════════════════════════════════════════════════════════════════
-    for gt in ['default', 'geolayer']:
-        for n_pumps in [1, 2, 3, 4]:
-            for s in _BASELINE_SEEDS:
-                configs.append({
-                    'graph_type': gt,
-                    'n_pumps_connected': n_pumps,
-                    'node_dropout': False,
-                    'seed': s,
-                    'seed_experiment_name': _OUTPUT_TAG,
-                })
+    for fam_key in ['default', 'geolayer', 'rf']:
+        for n_piezo in [4, 5, 6]:
+            configs.append({
+                **_BEST_PER_FAMILY[fam_key],
+                'n_piezo_connected': n_piezo,
+                'seed': _SEED,
+                'seed_experiment_name': _OUTPUT_TAG,
+            })
 
     return configs
 
