@@ -120,12 +120,8 @@ def define_base_configuration():
 # Explicit configuration list — each dict overrides base_config for that run.
 # When this list is non-empty, parameter_variations is ignored.
 # --------------------------------------------------------------------------
-_DROP_NODE = ['B39F0739-003']
 _SEEDS = [42, 123, 256, 512, 777, 1024, 2048, 3141]
 _5R_TAG = 'seed_experiment/5_rivers'
-_REVISED_HOP_TAG = 'seed_experiment/revised_hop'
-
-_DO_TAG = 'seed_experiment/5_rivers'  # same output folder, dropout suffix in filename
 
 # ── Per-variant base overrides (graph-type-specific settings) ──
 _VARIANT_BASES = {
@@ -315,127 +311,44 @@ _GRID_FILL = {
 }
 
 def _build_grid_configs():
-    """Generate explicit_configs from remaining incomplete runs."""
+    """Generate explicit_configs for v3 runs."""
     configs = []
 
-    # ══════════════════════════════════════════════════════════════════
-    # Thiem radius ablation: COMPLETE (63/63) — removed
-    # Coherence cutoff ablation: COMPLETE (126/126) — removed
-    # Per-station pump weights: COMPLETE (42/42) — removed
-    # Split70 weekly extension: COMPLETE — removed
-    # GWNet baseline: COMPLETE (9/9) — removed
-    # GWNet b4_lr01 × 8 seeds: COMPLETE — removed
-    # Grid fill SP-binary thiem × 5 seeds: COMPLETE — removed
-    # Pump influence (fikk_only/sij/heavy) × 7 families: COMPLETE — removed
-    # Thiem perR × 7 families: COMPLETE — removed
-    # Long-patience weekly × 8 families: COMPLETE — removed
-    # ══════════════════════════════════════════════════════════════════
-
-    # ══════════════════════════════════════════════════════════════════
-    # Daily resolution × 3 seeds: ALL 8 families COMPLETE — removed
-    # ══════════════════════════════════════════════════════════════════
-
-    # ══════════════════════════════════════════════════════════════════
-    # Daily 70/10/20 split: COMPLETE (3 seeds × 8 families) — removed
-    # ══════════════════════════════════════════════════════════════════
-
-    # ══════════════════════════════════════════════════════════════════
-    # Derivative input ablation: COMPLETE — worse than baseline, removed
-    # ══════════════════════════════════════════════════════════════════
-
     _ALL_SEEDS = [42, 123, 256, 512, 777, 1024, 2048, 3141]
+    _BASELINE_SEEDS = [42, 123, 256]
 
     # ══════════════════════════════════════════════════════════════════
-    # F_w=6 weekly extension: 8 families × 8 seeds
-    # s42/s123/s256 COMPLETE — remaining 5 seeds
-    # fw_label=3 keeps directory name as MTGNN_fw3_... to find checkpoints.
+    # v3 Baseline: all 8 graph families × 3 seeds, weekly
+    # Bug fixes: pump ordering, precip/evap connectivity, per-type scaling
     # ══════════════════════════════════════════════════════════════════
+    for fam_key, fam_cfg in _BEST_PER_FAMILY.items():
+        for s in _BASELINE_SEEDS:
+            configs.append({
+                **fam_cfg,
+                'seed': s,
+                'seed_experiment_name': _5R_TAG,
+            })
+
     # ══════════════════════════════════════════════════════════════════
     # One-way exogenous: exo → piezo only (no signal relay through exo)
     # All 8 graph families × 3 seeds, weekly
-    # Output folder: {graph_type}_oneway_exo/
     # ══════════════════════════════════════════════════════════════════
     for fam_key, fam_cfg in _BEST_PER_FAMILY.items():
-        for s in [42, 123, 256]:
+        for s in _BASELINE_SEEDS:
             configs.append({
                 **fam_cfg,
                 'one_way_exo': True,
                 'seed': s,
-                'seed_experiment_name': _REVISED_HOP_TAG,
+                'seed_experiment_name': _5R_TAG,
             })
 
-    # ══════════════════════════════════════════════════════════════════
-    # Prebuilt adjacency: default + exo_2km_depth75 rule
-    # River/pump edges only for piezos within 2 km AND screen > -75 m NAP
-    # 3 seeds, weekly
-    # ══════════════════════════════════════════════════════════════════
     from config import GENERATED_GRAPHS
     _PREBUILT_ADJ = str(Path(GENERATED_GRAPHS) /
                         'adj_default_WM_fixed_piezo_3_pumps_1_exo_2km_depth75.npy')
-    for s in [42, 123, 256]:
-        configs.append({
-            'graph_type': 'prebuilt',
-            'sp_config': {'prebuilt_path': _PREBUILT_ADJ},
-            'n_pumps_connected': 1,
-            'node_dropout': False,
-            'seed': s,
-            'seed_experiment_name': _REVISED_HOP_TAG,
-        })
-
     return configs
 
 explicit_configs = _build_grid_configs()
 
-# Previous config (kept for reference):
-# explicit_configs = [
-#     # Exogenous ablation: 5 conditions × 8 families × 3 seeds = 120 runs
-#     *[{**fam_cfg,
-#        'exo_ablation': abl,
-#        'seed': s,
-#        'seed_experiment_name': _5R_TAG + '/ablation'}
-#       for fam_cfg in _BEST_PER_FAMILY.values()
-#       for abl in _EXO_ABLATIONS
-#       for s in _ABLATION_SEEDS],
-#     # Adaptive graph baselines — 3 seeds
-#     *[{**_BEST_PER_FAMILY['adaptive'],
-#        'seed': s,
-#        'seed_experiment_name': _5R_TAG + '/ablation'}
-#       for s in _ABLATION_SEEDS],
-# ]
-
-# Previous config (kept for reference):
-# explicit_configs = [
-#     # ---- Drop high-RMSE node: default, geolayer, rf x 8 seeds ----
-#     *[{'graph_type': gt, 'seed': s, 'exclude_nodes': _DROP_NODE}
-#       for gt in ('default', 'geolayer', 'rf')
-#       for s in _SEEDS],
-# ]
-
-# Previous config (kept for reference):
-# explicit_configs = [
-#     # ---- Mixed-optimal graph x 8 seeds ----
-#     {'graph_type': 'mixed', 'seed': 42},
-#     {'graph_type': 'mixed', 'seed': 123},
-#     {'graph_type': 'mixed', 'seed': 256},
-#     {'graph_type': 'mixed', 'seed': 512},
-#     {'graph_type': 'mixed', 'seed': 777},
-#     {'graph_type': 'mixed', 'seed': 1024},
-#     {'graph_type': 'mixed', 'seed': 2048},
-#     {'graph_type': 'mixed', 'seed': 3141},
-# ]
-
 # Define variations for each parameter (Cartesian product — only used when explicit_configs is empty)
-parameter_variations = {
-  #'graph_type': ['default', 'geolayer', 'rf'],
-  #'node_dropout': [True, False],
-  #'feature_importance_multiplier' : [0.1],
-  #'n_piezo_connected' : [4,6],
-  #'n_pumps_connected' : [3],
-  #'layer_constrain' : [False],
-  #'weight_mode' : ['fixed']
-  #'skip_channels': [128, 256],
-  #'W': [15],
-  #'kernel_set': [[2, 3], [3, 4]],
-  #'kernel_size': [2, 3],
-  #'dilation exponential' : [1,2,3]
-}
+parameter_variations = {}
+

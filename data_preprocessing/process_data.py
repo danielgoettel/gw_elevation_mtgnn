@@ -355,14 +355,41 @@ def split_and_normalize_data(df_piezo, missing_data_mask, external_data, config)
         test_data = temp_data
         val_mask = temp_mask
         test_mask = temp_mask
-    # Normalize the datasets
-    scaler = MinMaxScaler(feature_range=(0, 1))
-    train_data = pd.DataFrame(scaler.fit_transform(train_data), index=train_data.index, columns=train_data.columns)
-    val_data = pd.DataFrame(scaler.transform(val_data), index=val_data.index, columns=val_data.columns)
-    test_data = pd.DataFrame(scaler.transform(test_data), index=test_data.index, columns=test_data.columns)
+    # ── Per-type normalization ──
+    # Each variable type shares a single MinMaxScaler so cross-node magnitude
+    # differences are preserved (e.g. higher GW elevation stays higher).
+    df_pump, df_prec, df_evap, df_river = external_data
+    piezo_cols = list(df_piezo.columns)
+    pump_cols  = list(df_pump.columns)
+    prec_cols  = list(df_prec.columns)
+    evap_cols  = list(df_evap.columns)
+    river_cols = [c for c in train_data.columns if c not in piezo_cols + pump_cols + prec_cols + evap_cols]
+
+    type_groups = {
+        'piezo': piezo_cols,
+        'pump':  pump_cols,
+        'prec':  prec_cols,
+        'evap':  evap_cols,
+        'river': river_cols,
+    }
+
+    scalers = {}
+    for type_name, cols in type_groups.items():
+        if not cols:
+            continue
+        scaler = MinMaxScaler(feature_range=(0, 1))
+        # Fit on flattened training values so all columns of this type share one min/max
+        train_vals = train_data[cols].values
+        scaler.fit(train_vals.reshape(-1, 1))
+        # Transform each split using the shared min/max
+        train_data[cols] = scaler.transform(train_vals.reshape(-1, 1)).reshape(train_vals.shape)
+        val_data[cols]   = scaler.transform(val_data[cols].values.reshape(-1, 1)).reshape(val_data[cols].shape)
+        test_data[cols]  = scaler.transform(test_data[cols].values.reshape(-1, 1)).reshape(test_data[cols].shape)
+        scalers[type_name] = scaler
 
     # Return the normalized datasets along with their corresponding masks
-    return train_data, val_data, test_data, train_mask, val_mask, test_mask, scaler
+    # The piezo scaler is used for inverse_transform of predictions
+    return train_data, val_data, test_data, train_mask, val_mask, test_mask, scalers
 
 
 def define_configuration(synthetic_data):

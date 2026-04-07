@@ -8,30 +8,27 @@ IN_COLAB = "COLAB_RELEASE_TAG" in os.environ or "COLAB_GPU" in os.environ
 # BASE_PATH always resolves to the project root (where this config.py lives)
 BASE_PATH = Path(__file__).resolve().parent
 
-# Experiment tag — change this to write outputs to new folders
-EXPERIMENT = "Independent_Study"
-
 # Directories — inputs and outputs
 # On Colab, point to Google Drive so data persists across sessions.
 # Locally, everything lives under the repo root.
 if IN_COLAB:
     DRIVE_INPUT   = Path("/content/drive/MyDrive/Environmental_DL_Project/GroundwaterFlowGNN-main")
-    DRIVE_OUTPUT  = Path("/content/drive/MyDrive/Environmental_DL_Project/GroundwaterFlowGNN-v2-3hourly")
+    DRIVE_OUTPUT  = Path("/content/drive/MyDrive/Environmental_DL_Project/GroundwaterFlowGNN")
     INPUT_DIR = DRIVE_INPUT / "data" / "input"
-    PREPROCESSED_DIR = DRIVE_OUTPUT / "data" / f"preprocessed_{EXPERIMENT}"
-    GENERATED_GRAPHS = DRIVE_OUTPUT / f"generated_graphs_{EXPERIMENT}"
-    SCATTER_PLOTS = DRIVE_OUTPUT / f"scatterplots_{EXPERIMENT}"
-    SAVED_MODELS_DIR = DRIVE_OUTPUT / f"saved_models_{EXPERIMENT}"
-    TRAINING_RESULTS_DIR = DRIVE_OUTPUT / f"training_results_{EXPERIMENT}"
-    OUTPUTS_DIR = DRIVE_OUTPUT / f"outputs_{EXPERIMENT}"
+    PREPROCESSED_DIR = DRIVE_OUTPUT / "data" / "preprocessed"
+    GENERATED_GRAPHS = DRIVE_OUTPUT / "generated_graphs"
+    SCATTER_PLOTS = DRIVE_OUTPUT / "scatterplots"
+    SAVED_MODELS_DIR = DRIVE_OUTPUT / "saved_models"
+    TRAINING_RESULTS_DIR = DRIVE_OUTPUT / "training_results"
+    OUTPUTS_DIR = DRIVE_OUTPUT / "outputs"
 else:
     INPUT_DIR = BASE_PATH / "data" / "input"
-    PREPROCESSED_DIR = BASE_PATH / "data" / f"preprocessed_{EXPERIMENT}"
-    GENERATED_GRAPHS = BASE_PATH / f"generated_graphs_{EXPERIMENT}"
-    SCATTER_PLOTS = BASE_PATH / f"scatterplots_{EXPERIMENT}"
-    SAVED_MODELS_DIR = BASE_PATH / f"saved_models_{EXPERIMENT}"
-    TRAINING_RESULTS_DIR = BASE_PATH / f"training_results_{EXPERIMENT}"
-    OUTPUTS_DIR = BASE_PATH / f"outputs_{EXPERIMENT}"
+    PREPROCESSED_DIR = BASE_PATH / "data" / "preprocessed"
+    GENERATED_GRAPHS = BASE_PATH / "generated_graphs"
+    SCATTER_PLOTS = BASE_PATH / "scatterplots"
+    SAVED_MODELS_DIR = BASE_PATH / "saved_models"
+    TRAINING_RESULTS_DIR = BASE_PATH / "training_results"
+    OUTPUTS_DIR = BASE_PATH / "outputs"
 PIEZO_CSV_DIR = INPUT_DIR / "piezometers/csv/csv"
 TRAINING_SUMMARIES = TRAINING_RESULTS_DIR / "Summaries"
 RUN_PLOTS_AND_RESULTS = TRAINING_RESULTS_DIR / "Individual_Run_Results"
@@ -56,8 +53,8 @@ if IN_COLAB:
     HYDRAULIC_RESISTANCE_DIR = DRIVE_OUTPUT / "data" / "Shortest_Path_Graphs"
     REGIS_DIR = DRIVE_OUTPUT / "data" / "REGIS II Study Area Raster Data"
 else:
-    HYDRAULIC_RESISTANCE_DIR = BASE_PATH.parent / "data" / "Shortest_Path_Graphs"
-    REGIS_DIR = BASE_PATH.parent / "data" / "REGIS II Study Area Raster Data"
+    HYDRAULIC_RESISTANCE_DIR = BASE_PATH / "data" / "Shortest_Path_Graphs"
+    REGIS_DIR = BASE_PATH / "data" / "REGIS II Study Area Raster Data"
 RANDOM_FOREST_TRAINING_DATA = INPUT_DIR / "piezo_only_rf_training_data.csv"
 
 #Pickl files for RF Training Importances

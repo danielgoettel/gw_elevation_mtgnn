@@ -117,34 +117,39 @@ def make_predictions(model, sample, device, F_w, W, A_tilde, static_features, nu
 
 def inverse_transform_with_shape_adjustment(data, scaler, original_feature_count):
     """
-    Adjusts the shape of the data for the scaler's inverse_transform method and extracts the original features.
+    Inverse-transform predictions back to original units.
+
+    Supports both:
+    - dict of per-type scalers (v3): uses scaler['piezo'] which was fit on
+      flattened values (single feature), so inverse_transform takes (N, 1).
+    - legacy single MinMaxScaler (v2): pads with dummy columns as before.
 
     Parameters:
-    - data: The data to inverse transform, as a numpy array.
-    - scaler: The fitted scaler object used for inverse transformation.
-    - original_feature_count: The number of original features in the data before scaling.
+    - data: The data to inverse transform, as a numpy array (n_timesteps, n_piezo).
+    - scaler: Either a dict of scalers (v3) or a single MinMaxScaler (v2).
+    - original_feature_count: The number of piezometer features.
 
     Returns:
-    - The data after inverse transformation, with only the original features.
+    - The data after inverse transformation.
     """
-    # Check if data needs dummy features appended
-    if data.shape[1] < scaler.n_features_in_:
-        # Calculate the number of dummy features required
-        dummy_feature_count = scaler.n_features_in_ - original_feature_count
-        # Create a dummy array with the required number of dummy features
-        dummy_features = np.zeros((data.shape[0], dummy_feature_count))
-        # Append dummy features to the data
-        data_with_dummy = np.hstack((data, dummy_features))
+    if isinstance(scaler, dict):
+        # v3 per-type scaler: piezo scaler was fit on flattened values (1 feature)
+        piezo_scaler = scaler['piezo']
+        flat = data.reshape(-1, 1)
+        flat_inv = piezo_scaler.inverse_transform(flat)
+        return flat_inv.reshape(data.shape)
     else:
-        data_with_dummy = data
+        # Legacy v2 single scaler
+        if data.shape[1] < scaler.n_features_in_:
+            dummy_feature_count = scaler.n_features_in_ - original_feature_count
+            dummy_features = np.zeros((data.shape[0], dummy_feature_count))
+            data_with_dummy = np.hstack((data, dummy_features))
+        else:
+            data_with_dummy = data
 
-    # Apply the inverse transformation
-    data_inversed = scaler.inverse_transform(data_with_dummy)
-
-    # Extract the original features
-    data_inversed_corrected = data_inversed[:, :original_feature_count]
-
-    return data_inversed_corrected
+        data_inversed = scaler.inverse_transform(data_with_dummy)
+        data_inversed_corrected = data_inversed[:, :original_feature_count]
+        return data_inversed_corrected
 
 
 def generate_model_filename(model_type, future_window, graph_type=None, **kwargs):
