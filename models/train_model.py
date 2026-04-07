@@ -560,13 +560,20 @@ def main(run_all=True):
 
 
     for i, config in enumerate(configs[:total_runs], start=1):  # Limit the configs based on run_all flag
-        differing_params = {k: v for k, v in config.items() if base_config.get(k) != v}
-        differing_params_str = ', '.join([f'{key}: {value}' for key, value in differing_params.items()])
-        
-        if differing_params:
-            print(f"Running configuration {i} of {total_runs} with variation: {differing_params_str}")
-        else:
-            print(f"Running base configuration {i} of {total_runs}")
+        gt = config.get('graph_type', '?')
+        tag_parts = [gt]
+        if config.get('build_adj'):
+            tag_parts = ['adaptive']
+        if config.get('one_way_exo'):
+            tag_parts.append('one_way_exo')
+        if config.get('n_piezo_connected', 3) != 3:
+            tag_parts.append(f"n_piezo={config['n_piezo_connected']}")
+        if config.get('n_pumps_connected', 4) != base_config.get('n_pumps_connected', 4):
+            tag_parts.append(f"n_pumps={config['n_pumps_connected']}")
+        tag = ' | '.join(tag_parts)
+        print(f"\n{'='*60}")
+        print(f"  Run {i}/{total_runs}: {tag}  (seed={config.get('seed')}, F_w={config.get('F_w')})")
+        print(f"{'='*60}")
         
         step_results, dropped_node_names, model_base = run_training_and_evaluation(config)
 
