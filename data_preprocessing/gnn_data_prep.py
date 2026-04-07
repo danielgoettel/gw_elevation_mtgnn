@@ -994,7 +994,6 @@ def load_and_concatenate_metadata(piezo_metadata_path, pump_metadata_path, evap_
     # Load metadata for piezometers
     piezo_metadata = pd.read_csv(piezo_metadata_path)
     filtered_metadata = piezo_metadata[piezo_metadata['name'].isin(df_piezo_columns)]
-    print(filtered_metadata.shape)
     filtered_metadata = filtered_metadata.set_index('name').reindex(df_piezo_columns).reset_index()
     piezo_z = (filtered_metadata['top_filter'] + filtered_metadata['bottom_filter'])/2
 
@@ -1421,7 +1420,6 @@ def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, perce
 
     nodes_df.to_csv(outdir / "nodes.csv", index=False)
 
-    print(f"Wrote {len(node_names)} names to {outdir/'node_names.csv'}")
 
     # Generate adjacency matrix
     # For this, you need to adjust coordinates format and threshold as needed

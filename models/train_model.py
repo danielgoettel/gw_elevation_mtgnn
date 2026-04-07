@@ -33,6 +33,7 @@ import random
 
 try:
     import wandb
+    wandb.setup({"silent": True})
     WANDB_AVAILABLE = True
 except ImportError:
     WANDB_AVAILABLE = False
@@ -254,8 +255,6 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
         # restart early stopping for every window
         patience_counter = 0
         try:
-        
-            _debug_printed = False
             for epoch in range(num_epochs):
                 start_time_epoch = time.time()  # Start time for the current epoch
 
@@ -284,12 +283,6 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
                                                              use_derivatives=use_derivatives,
                                                              deriv_stats=deriv_stats)
 
-                          if not _debug_printed:
-                              print(f"[DEBUG] combined_input: {combined_input.shape}, min={combined_input.min():.4f}, max={combined_input.max():.4f}")
-                              print(f"[DEBUG] current_input: {current_input.shape}, current_forces: {current_forces.shape}")
-                              print(f"[DEBUG] target sample [0,:5,0]: {target_sequence[0,:5,0].tolist()}")
-                              print(f"[DEBUG] input sample [0,:5,0]: {input_sequence[0,:5,0].tolist()}")
-
                           output = model_forward(
                               model, combined_input, model_type, config, device,
                               A_tilde=A_tilde, static_features=static_features,
@@ -297,9 +290,6 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
 
                           if model_type in ('MTGNN', 'GWNet'):
                               output = output[:, :, :num_piezo, 0]
-                          if not _debug_printed:
-                              print(f"[DEBUG] output sample [0,:5,0]: {output[0,:5,0].detach().tolist() if output.dim()>2 else output[0,:5].detach().tolist()}")
-                              _debug_printed = True
                           predictions.append(output)
                           next_input = output
                           current_input = torch.cat((current_input[:, 1:, :], next_input), dim=1)
@@ -562,14 +552,9 @@ def main(run_all=True):
 
     summaries = []
 
-    # Debug: confirm the loaded code and config
-    print(f"[DEBUG] OUTPUTS_DIR = {OUTPUTS_DIR}")
-    print(f"[DEBUG] parameter_variations = {parameter_variations}")
-
     configs = generate_configurations()
     base_config = configs[0]  # The first configuration is the base configuration
     total_runs = len(configs) if run_all else 1
-    print(f"[DEBUG] Total configurations to run: {total_runs} (run_all={run_all})")
 
 
 
