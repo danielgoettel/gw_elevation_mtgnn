@@ -1,3 +1,5 @@
+from pathlib import Path
+
 def define_base_configuration():
     return {
         'synthetic_data': False,
@@ -347,29 +349,23 @@ def _build_grid_configs():
     # s42/s123/s256 COMPLETE — remaining 5 seeds
     # fw_label=3 keeps directory name as MTGNN_fw3_... to find checkpoints.
     # ══════════════════════════════════════════════════════════════════
-    _FW6_WEEKLY_REMAINING = [512, 777, 1024, 2048, 3141]
-    for fam_key, fam_cfg in _BEST_PER_FAMILY.items():
-        for s in _FW6_WEEKLY_REMAINING:
-            configs.append({**fam_cfg,
-                'F_w': 6,
-                'fw_label': 3,
-                'seed': s,
-                'seed_experiment_name': _5R_TAG})
-
     # ══════════════════════════════════════════════════════════════════
-    # F_w=6 daily extension: 8 families × 8 seeds
-    # Some fw1-3 checkpoints exist (will be skipped), rest train from scratch.
-    # fw_label=3 keeps directory name as MTGNN_fw3_... to find checkpoints.
+    # Prebuilt adjacency: exo_2km_depth75 rule (river/pump edges only
+    # for piezometers within 2 km of river/pump AND screen > -75 m NAP)
+    # Default base config × 3 seeds, weekly
     # ══════════════════════════════════════════════════════════════════
-    for fam_key, fam_cfg in _BEST_PER_FAMILY.items():
-        for s in _ALL_SEEDS:
-            configs.append({**fam_cfg,
-                'resampling_freq': 'D',
-                'freq_tag': 'daily',
-                'F_w': 6,
-                'fw_label': 3,
-                'seed': s,
-                'seed_experiment_name': _5R_TAG + '/ablation'})
+    from config import GENERATED_GRAPHS
+    _PREBUILT_ADJ = str(Path(GENERATED_GRAPHS) /
+                        'adj_default_WM_fixed_piezo_3_pumps_1_exo_2km_depth75.npy')
+    for s in [42, 123, 256]:
+        configs.append({
+            'graph_type': 'prebuilt',
+            'sp_config': {'prebuilt_path': _PREBUILT_ADJ},
+            'n_pumps_connected': 1,
+            'node_dropout': False,
+            'seed': s,
+            'seed_experiment_name': _5R_TAG,
+        })
 
     return configs
 

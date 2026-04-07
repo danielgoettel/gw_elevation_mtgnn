@@ -1507,6 +1507,15 @@ def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, perce
         for v, c in counts.most_common():
             print(f"  {v}: {c} nodes")
 
+    elif graph_type == 'prebuilt':
+        # Load a pre-built adjacency matrix from a user-specified .npy file
+        prebuilt_path = sp_config.get('prebuilt_path') if sp_config else None
+        if prebuilt_path is None:
+            raise ValueError("graph_type='prebuilt' requires sp_config={'prebuilt_path': '/path/to/adj.npy'}")
+        adj_matrix = np.load(prebuilt_path)
+        print(f"  Loaded prebuilt adjacency from {prebuilt_path}: shape={adj_matrix.shape}, nnz={np.count_nonzero(adj_matrix)}")
+        np.save(GENERATED_GRAPHS / f"{graph_tag}.npy", adj_matrix)
+
     else:
         raise ValueError(f"Unknown graph_type: {graph_type}")
 
