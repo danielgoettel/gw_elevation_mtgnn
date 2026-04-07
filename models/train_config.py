@@ -313,14 +313,19 @@ def _build_grid_configs():
     _SEED = 42
 
     # ══════════════════════════════════════════════════════════════════
-    # Two-way exo default (legacy scaling)
+    # Exo distance limit: river/pump only within 2km, screen > -75m NAP
+    # All 7 graph families, legacy scaling + one_way_exo
     # ══════════════════════════════════════════════════════════════════
-    configs.append({
-        **_BEST_PER_FAMILY['default'],
-        'legacy_scaling': True,
-        'seed': _SEED,
-        'seed_experiment_name': _OUTPUT_TAG,
-    })
+    _EXO_DIST = {'max_distance': 2000, 'min_screen_depth': -75}
+    for fam_key, fam_cfg in _BEST_PER_FAMILY.items():
+        configs.append({
+            **fam_cfg,
+            'legacy_scaling': True,
+            'one_way_exo': True,
+            'exo_distance_limit': _EXO_DIST,
+            'seed': _SEED,
+            'seed_experiment_name': _OUTPUT_TAG,
+        })
 
     return configs
 
