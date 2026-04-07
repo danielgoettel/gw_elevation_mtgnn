@@ -120,7 +120,7 @@ def define_base_configuration():
 # When this list is non-empty, parameter_variations is ignored.
 # --------------------------------------------------------------------------
 _SEEDS = [42, 123, 256, 512, 777, 1024, 2048, 3141]
-_5R_TAG = 'seed_experiment/5_rivers'
+_OUTPUT_TAG = 'v3'
 
 # ── Per-variant base overrides (graph-type-specific settings) ──
 _VARIANT_BASES = {
@@ -325,7 +325,7 @@ def _build_grid_configs():
             configs.append({
                 **fam_cfg,
                 'seed': s,
-                'seed_experiment_name': _5R_TAG,
+                'seed_experiment_name': _OUTPUT_TAG,
             })
 
     # ══════════════════════════════════════════════════════════════════
@@ -338,7 +338,7 @@ def _build_grid_configs():
                 **fam_cfg,
                 'one_way_exo': True,
                 'seed': s,
-                'seed_experiment_name': _5R_TAG,
+                'seed_experiment_name': _OUTPUT_TAG,
             })
 
     # ══════════════════════════════════════════════════════════════════
@@ -354,7 +354,7 @@ def _build_grid_configs():
                     'n_pumps_connected': n_pumps,
                     'node_dropout': False,
                     'seed': s,
-                    'seed_experiment_name': _5R_TAG,
+                    'seed_experiment_name': _OUTPUT_TAG,
                 })
 
     return configs
