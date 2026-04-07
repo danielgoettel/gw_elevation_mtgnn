@@ -251,20 +251,22 @@ def fix_known_data_issues(df):
             df.loc[mask, col] = np.nan
             print(f"  Spike removal: {col} — removed {mask.sum()} bad points (2019-12-18/19)")
 
-    # ── B40A0534-001: step change on 2010-02-04 ──
+    # ── B40A0534-001: sensor drift 2009-10-05 to 2010-02-03 ──
+    # Drops ~115 cm over a week then stays low for 4 months before snapping back.
+    # Shift the bad period up to connect with the last good value.
     col = 'B40A0534-001'
     if col in df.columns:
         ts = df[col]
-        split_date = pd.Timestamp('2010-02-04')
-        if split_date in ts.index:
-            before_mask = df.index < split_date
-            # Last value before jump and first value at/after jump
-            last_before = ts[before_mask].iloc[-1]
-            first_after = ts.loc[split_date]
-            offset = first_after - last_before
-            df.loc[before_mask, col] = ts[before_mask] + offset
-            print(f"  Datum shift fix: {col} — shifted {before_mask.sum()} "
-                  f"values by +{offset:.0f} cm")
+        bad_start = pd.Timestamp('2009-10-05')
+        bad_end = pd.Timestamp('2010-02-03')
+        if bad_start in ts.index and bad_end in ts.index:
+            last_good = ts.loc[:bad_start - pd.Timedelta(days=1)].iloc[-1]
+            first_bad = ts.loc[bad_start]
+            offset = last_good - first_bad
+            bad_mask = (df.index >= bad_start) & (df.index <= bad_end)
+            df.loc[bad_mask, col] = ts[bad_mask] + offset
+            print(f"  Sensor drift fix: {col} — shifted {bad_mask.sum()} "
+                  f"values ({bad_start.date()} to {bad_end.date()}) by +{offset:.0f} cm")
 
     return df
 
