@@ -570,6 +570,8 @@ def main(run_all=True):
             tag_parts.append(f"n_piezo={config['n_piezo_connected']}")
         if config.get('n_pumps_connected', 4) != base_config.get('n_pumps_connected', 4):
             tag_parts.append(f"n_pumps={config['n_pumps_connected']}")
+        if config.get('legacy_scaling'):
+            tag_parts.append('legacy_scaling')
         tag = ' | '.join(tag_parts)
         print(f"\n{'='*60}")
         print(f"  Run {i}/{total_runs}: {tag}  (seed={config.get('seed')}, F_w={config.get('F_w')})")
@@ -1048,6 +1050,7 @@ def run_training_and_evaluation(config):
         resampling_freq=config.get('resampling_freq', 'W'),
         val_split=config.get('val_split', None),
         test_val_size=config.get('test_val_size', 0.2),
+        legacy_scaling=config.get('legacy_scaling', False),
     )
     RANDOM_FOREST_TRAINING_DATA.parent.mkdir(parents=True, exist_ok=True)
     train_data.to_csv(RANDOM_FOREST_TRAINING_DATA)

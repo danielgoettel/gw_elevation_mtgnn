@@ -359,6 +359,17 @@ def _build_grid_configs():
                 'seed_experiment_name': _OUTPUT_TAG,
             })
 
+    # ══════════════════════════════════════════════════════════════════
+    # Legacy scaling comparison: per-column MinMaxScaler (v2 behavior)
+    # Default graph × 1 seed
+    # ══════════════════════════════════════════════════════════════════
+    configs.append({
+        **_BEST_PER_FAMILY['default'],
+        'legacy_scaling': True,
+        'seed': _SEED,
+        'seed_experiment_name': _OUTPUT_TAG,
+    })
+
     return configs
 
 explicit_configs = _build_grid_configs()
