@@ -573,6 +573,8 @@ def main(run_all=True):
         _sm = config.get('scaling_mode', 'legacy')
         if _sm != 'legacy':
             tag_parts.append(f'scaling={_sm}')
+        if config.get('exo_distance_limit'):
+            tag_parts.append('exo_dist_limit')
         tag = ' | '.join(tag_parts)
         print(f"\n{'='*60}")
         print(f"  Run {i}/{total_runs}: {tag}  (seed={config.get('seed')}, F_w={config.get('F_w')})")
@@ -1016,6 +1018,8 @@ def run_training_and_evaluation(config):
         _sm = config.get('scaling_mode', '')
         if _sm and _sm not in ('legacy', ''):
             gt_label += f'_{_sm}_scaling'
+        if config.get('exo_distance_limit'):
+            gt_label += '_exo_dist_limit'
         run_dir = OUTPUTS_DIR / seed_folder / gt_label / model_base
     elif config.get('multi_support'):
         run_dir = OUTPUTS_DIR / "multi_support" / model_base
@@ -1201,10 +1205,12 @@ def run_training_and_evaluation(config):
             rmse_table_path=rmse_table_path,
             variant_graph_paths=variant_adj,
             exo_ablation=config.get('exo_ablation'), log_pump_config=config.get('log_pump_config'),
-            one_way_exo=config.get('one_way_exo', False))
+            one_way_exo=config.get('one_way_exo', False),
+            exo_distance_limit=config.get('exo_distance_limit'))
     else:
         A_tilde, static_features = gnn_data_prep.main(df_piezo_columns, pump_columns, locations_no_missing, config['graph_type'], config['percentage'] , config['n_piezo_connected'], config['feature_importance_multiplier'], config['n_pumps_connected'], config['weight_mode'], config['layer_constrain'], directed_graph=config.get('directed_graph', False), mean_gw_elevation=mean_gw_elevation, rf_weight_min=config.get('rf_weight_min', 0.08), rf_weight_max=config.get('rf_weight_max', 0.2), rf_vim_min=config.get('rf_vim_min', 0.01), rf_min_connections=config.get('rf_min_connections', 3), sp_config=config.get('sp_config'), fd_config=config.get('fd_config'), rf_config=config.get('rf_config'), exo_ablation=config.get('exo_ablation'), log_pump_config=config.get('log_pump_config'),
-            one_way_exo=config.get('one_way_exo', False))
+            one_way_exo=config.get('one_way_exo', False),
+            exo_distance_limit=config.get('exo_distance_limit'))
 
     # ── Slice adjacency & static features to match reduced data columns ──
     if _exo_drop_cols:

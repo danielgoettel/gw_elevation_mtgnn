@@ -1387,7 +1387,7 @@ def generate_mixed_optimal_adjacency(rmse_table_path, variant_adj_matrices, num_
     return mixed_adj, best_variant_per_node
 
 
-def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, percentage=None, n_piezo_connected=3, feature_importance_multiplier = None, n_pumps_connected = 4, weight_mode = 'fixed', same_layer = False, directed_graph=False, mean_gw_elevation=None, rf_weight_min=0.08, rf_weight_max=0.2, rf_vim_min=0.01, rf_min_connections=3, rmse_table_path=None, variant_graph_paths=None, sp_config=None, fd_config=None, rf_config=None, exo_ablation=None, log_pump_config=None, one_way_exo=False):
+def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, percentage=None, n_piezo_connected=3, feature_importance_multiplier = None, n_pumps_connected = 4, weight_mode = 'fixed', same_layer = False, directed_graph=False, mean_gw_elevation=None, rf_weight_min=0.08, rf_weight_max=0.2, rf_vim_min=0.01, rf_min_connections=3, rmse_table_path=None, variant_graph_paths=None, sp_config=None, fd_config=None, rf_config=None, exo_ablation=None, log_pump_config=None, one_way_exo=False, exo_distance_limit=None):
     # Paths to the metadata files (update these paths according to your folder structure)
 
     metadata_path = PIEZO_METADATA
@@ -1638,6 +1638,66 @@ def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, perce
         adj_matrix[exo_start:, exo_start:] = 0
         after_nnz = np.count_nonzero(adj_matrix)
         print(f"  One-way exo: removed {before_nnz - after_nnz} reverse/exo-exo edges "
+              f"({before_nnz} → {after_nnz} non-zero)")
+
+    # ── Exo distance limit: restrict river/pump edges by distance and screen depth ──
+    if exo_distance_limit:
+        edl = exo_distance_limit
+        max_dist = edl.get('max_distance', 2000)       # meters
+        min_screen = edl.get('min_screen_depth', -75)   # m NAP
+
+        pump_start = num_piezo
+        pump_end = num_piezo + num_pump
+        river_start = num_piezo + num_pump + num_prec + num_evap
+
+        # Load piezometer metadata for coordinates and filter depths
+        piezo_meta = pd.read_csv(PIEZO_METADATA).set_index('name')
+        pump_meta_df = pd.read_csv(PUMP_METADATA)
+
+        before_nnz = np.count_nonzero(adj_matrix)
+        removed_dist = 0
+        removed_depth = 0
+
+        for i, pname in enumerate(df_piezo_columns):
+            if pname not in piezo_meta.index:
+                continue
+            px, py = piezo_meta.loc[pname, 'x_coord'], piezo_meta.loc[pname, 'y_coord']
+            top_f = piezo_meta.loc[pname, 'top_filter'] / 100   # cm → m NAP
+            bot_f = piezo_meta.loc[pname, 'bottom_filter'] / 100
+            screen_mid = (top_f + bot_f) / 2
+
+            # Depth filter: disconnect river/pump for deep screens
+            if screen_mid <= min_screen:
+                if np.count_nonzero(adj_matrix[i, river_start:]) > 0:
+                    adj_matrix[i, river_start:] = 0
+                    removed_depth += 1
+                if np.count_nonzero(adj_matrix[i, pump_start:pump_end]) > 0:
+                    adj_matrix[i, pump_start:pump_end] = 0
+                    removed_depth += 1
+                continue
+
+            # Distance filter: disconnect pumps beyond max_dist
+            for j, (_, pw) in enumerate(pump_meta_df.iterrows()):
+                dist = np.sqrt((px - pw['Xcoor'])**2 + (py - pw['Ycoor'])**2)
+                if dist > max_dist and adj_matrix[i, pump_start + j] > 0:
+                    adj_matrix[i, pump_start + j] = 0
+                    removed_dist += 1
+
+            # Distance filter: disconnect rivers beyond max_dist
+            # Use the river node coordinates from the adjacency construction
+            for j in range(num_river):
+                r_idx = river_start + j
+                rx, ry = all_x[r_idx], all_y[r_idx]
+                dist = np.sqrt((px - rx)**2 + (py - ry)**2)
+                if dist > max_dist and adj_matrix[i, r_idx] > 0:
+                    adj_matrix[i, r_idx] = 0
+                    removed_dist += 1
+
+        # Symmetrize removals
+        adj_matrix = np.maximum(adj_matrix, adj_matrix.T)
+        after_nnz = np.count_nonzero(adj_matrix)
+        print(f"  Exo distance limit: removed {removed_dist} by distance (>{max_dist}m), "
+              f"{removed_depth} by depth (<{min_screen}m NAP) "
               f"({before_nnz} → {after_nnz} non-zero)")
 
     # Apply directional mask: keep piezo-piezo edges only from higher to lower GW elevation
