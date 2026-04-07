@@ -313,51 +313,9 @@ def _build_grid_configs():
     _SEED = 42
 
     # ══════════════════════════════════════════════════════════════════
-    # v3 Baseline: adaptive only (others completed)
+    # Legacy scaling comparison: per-column MinMaxScaler (v2 behavior)
+    # Default graph × 1 seed — run FIRST to check if scaling is the issue
     # ══════════════════════════════════════════════════════════════════
-    configs.append({
-        **_BEST_PER_FAMILY['adaptive'],
-        'seed': _SEED,
-        'seed_experiment_name': _OUTPUT_TAG,
-    })
-
-    # ══════════════════════════════════════════════════════════════════
-    # One-way exogenous: exo → piezo only (no signal relay through exo)
-    # All 7 graph families × 1 seed, weekly
-    # ══════════════════════════════════════════════════════════════════
-    for fam_key, fam_cfg in _BEST_PER_FAMILY.items():
-        configs.append({
-            **fam_cfg,
-            'one_way_exo': True,
-            'seed': _SEED,
-            'seed_experiment_name': _OUTPUT_TAG,
-        })
-
-    # ══════════════════════════════════════════════════════════════════
-    # Pump connectivity ablation: default & geolayer × n_pumps 1-4 × 1 seed
-    # ══════════════════════════════════════════════════════════════════
-    for gt in ['default', 'geolayer']:
-        for n_pumps in [1, 2, 3, 4]:
-            configs.append({
-                'graph_type': gt,
-                'n_pumps_connected': n_pumps,
-                'node_dropout': False,
-                'seed': _SEED,
-                'seed_experiment_name': _OUTPUT_TAG,
-            })
-
-    # ══════════════════════════════════════════════════════════════════
-    # Piezo connectivity ablation: default, geolayer, rf × n_piezo 4,5,6 × 1 seed
-    # (n_piezo=3 is the baseline default)
-    # ══════════════════════════════════════════════════════════════════
-    for fam_key in ['default', 'geolayer', 'rf']:
-        for n_piezo in [4, 5, 6]:
-            configs.append({
-                **_BEST_PER_FAMILY[fam_key],
-                'n_piezo_connected': n_piezo,
-                'seed': _SEED,
-                'seed_experiment_name': _OUTPUT_TAG,
-            })
 
     # ══════════════════════════════════════════════════════════════════
     # Legacy scaling comparison: per-column MinMaxScaler (v2 behavior)
