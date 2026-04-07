@@ -313,6 +313,19 @@ def _build_grid_configs():
     _SEED = 42
 
     # ══════════════════════════════════════════════════════════════════
+    # Scaling experiments: default graph, 1 seed each
+    # 1. hybrid: per-column piezos + per-type exo
+    # 2. maxrange: each piezo scaled to max piezo range + per-type exo
+    # ══════════════════════════════════════════════════════════════════
+    for sm in ['hybrid', 'maxrange']:
+        configs.append({
+            **_BEST_PER_FAMILY['default'],
+            'scaling_mode': sm,
+            'seed': _SEED,
+            'seed_experiment_name': _OUTPUT_TAG,
+        })
+
+    # ══════════════════════════════════════════════════════════════════
     # All runs with legacy (per-column) scaling
     # ══════════════════════════════════════════════════════════════════
 

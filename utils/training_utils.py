@@ -133,11 +133,15 @@ def inverse_transform_with_shape_adjustment(data, scaler, original_feature_count
     - The data after inverse transformation.
     """
     if isinstance(scaler, dict):
-        # v3 per-type scaler: piezo scaler was fit on flattened values (1 feature)
         piezo_scaler = scaler['piezo']
-        flat = data.reshape(-1, 1)
-        flat_inv = piezo_scaler.inverse_transform(flat)
-        return flat_inv.reshape(data.shape)
+        if piezo_scaler.n_features_in_ == 1:
+            # per-type: scaler fit on flattened values (1 feature)
+            flat = data.reshape(-1, 1)
+            flat_inv = piezo_scaler.inverse_transform(flat)
+            return flat_inv.reshape(data.shape)
+        else:
+            # hybrid/maxrange: scaler fit on 200 columns
+            return piezo_scaler.inverse_transform(data)
     else:
         # Legacy v2 single scaler
         if data.shape[1] < scaler.n_features_in_:

@@ -430,42 +430,80 @@ def split_and_normalize_data(df_piezo, missing_data_mask, external_data, config)
         val_mask = temp_mask
         test_mask = temp_mask
     # ── Normalization ──
-    if config.get('legacy_scaling'):
+    scaling_mode = config.get('scaling_mode', 'legacy')
+    df_pump, df_prec, df_evap, df_river = external_data
+    piezo_cols = list(df_piezo.columns)
+    pump_cols  = list(df_pump.columns)
+    prec_cols  = list(df_prec.columns)
+    evap_cols  = list(df_evap.columns)
+    river_cols = [c for c in train_data.columns if c not in piezo_cols + pump_cols + prec_cols + evap_cols]
+
+    def _scale_group(cols, train_df, val_df, test_df, shared=False):
+        """Fit MinMaxScaler on train, transform all splits.
+        shared=True: one min/max across all columns (flattened).
+        shared=False: per-column min/max (standard MinMaxScaler)."""
+        scaler = MinMaxScaler(feature_range=(0, 1))
+        if shared:
+            train_vals = train_df[cols].values
+            scaler.fit(train_vals.reshape(-1, 1))
+            train_df[cols] = scaler.transform(train_vals.reshape(-1, 1)).reshape(train_vals.shape)
+            val_df[cols]   = scaler.transform(val_df[cols].values.reshape(-1, 1)).reshape(val_df[cols].shape)
+            test_df[cols]  = scaler.transform(test_df[cols].values.reshape(-1, 1)).reshape(test_df[cols].shape)
+        else:
+            train_df[cols] = scaler.fit_transform(train_df[cols])
+            val_df[cols]   = scaler.transform(val_df[cols])
+            test_df[cols]  = scaler.transform(test_df[cols])
+        return scaler
+
+    if scaling_mode == 'legacy' or config.get('legacy_scaling'):
         # Legacy v2: per-column MinMaxScaler (each column gets its own min/max)
         scaler = MinMaxScaler(feature_range=(0, 1))
         train_data = pd.DataFrame(scaler.fit_transform(train_data), index=train_data.index, columns=train_data.columns)
         val_data = pd.DataFrame(scaler.transform(val_data), index=val_data.index, columns=val_data.columns)
         test_data = pd.DataFrame(scaler.transform(test_data), index=test_data.index, columns=test_data.columns)
         scalers = scaler  # single scaler, backward compatible
-    else:
-        # v3: per-type MinMaxScaler (all columns of same type share one min/max)
-        df_pump, df_prec, df_evap, df_river = external_data
-        piezo_cols = list(df_piezo.columns)
-        pump_cols  = list(df_pump.columns)
-        prec_cols  = list(df_prec.columns)
-        evap_cols  = list(df_evap.columns)
-        river_cols = [c for c in train_data.columns if c not in piezo_cols + pump_cols + prec_cols + evap_cols]
 
-        type_groups = {
-            'piezo': piezo_cols,
-            'pump':  pump_cols,
-            'prec':  prec_cols,
-            'evap':  evap_cols,
-            'river': river_cols,
-        }
-
+    elif scaling_mode == 'hybrid':
+        # Piezos: per-column, Exo: per-type (shared within group)
         scalers = {}
-        for type_name, cols in type_groups.items():
-            if not cols:
-                continue
-            scaler = MinMaxScaler(feature_range=(0, 1))
-            train_vals = train_data[cols].values
-            scaler.fit(train_vals.reshape(-1, 1))
-            train_data[cols] = scaler.transform(train_vals.reshape(-1, 1)).reshape(train_vals.shape)
-            val_data[cols]   = scaler.transform(val_data[cols].values.reshape(-1, 1)).reshape(val_data[cols].shape)
-            test_data[cols]  = scaler.transform(test_data[cols].values.reshape(-1, 1)).reshape(test_data[cols].shape)
-            scalers[type_name] = scaler
+        scalers['piezo'] = _scale_group(piezo_cols, train_data, val_data, test_data, shared=False)
+        for type_name, cols in [('pump', pump_cols), ('prec', prec_cols), ('evap', evap_cols), ('river', river_cols)]:
+            if cols:
+                scalers[type_name] = _scale_group(cols, train_data, val_data, test_data, shared=True)
 
+    elif scaling_mode == 'maxrange':
+        # Piezos: each scaled by the max range across all piezos (0=col_min, max_range=1)
+        # So a well with 57cm range uses [0, 0.12] while a well with 479cm uses [0, 1]
+        # Exo: per-type (shared within group)
+        train_ranges = train_data[piezo_cols].max() - train_data[piezo_cols].min()
+        max_range = train_ranges.max()
+        train_mins = train_data[piezo_cols].min()
+
+        # Build a scaler-compatible object for inverse transform
+        scaler = MinMaxScaler(feature_range=(0, 1))
+        scaler.fit(train_data[piezo_cols])  # fit per-column to get data_min_, data_range_
+        # Override: scale each column so that max_range maps to 1
+        scaler.data_range_[:] = max_range
+        scaler.scale_ = 1.0 / max_range
+        scaler.min_ = -train_mins.values / max_range
+
+        train_data[piezo_cols] = scaler.transform(train_data[piezo_cols])
+        val_data[piezo_cols]   = scaler.transform(val_data[piezo_cols])
+        test_data[piezo_cols]  = scaler.transform(test_data[piezo_cols])
+
+        scalers = {'piezo': scaler}
+        for type_name, cols in [('pump', pump_cols), ('prec', prec_cols), ('evap', evap_cols), ('river', river_cols)]:
+            if cols:
+                scalers[type_name] = _scale_group(cols, train_data, val_data, test_data, shared=True)
+
+    else:
+        # per-type (all columns of same type share one min/max)
+        scalers = {}
+        for type_name, cols in [('piezo', piezo_cols), ('pump', pump_cols), ('prec', prec_cols), ('evap', evap_cols), ('river', river_cols)]:
+            if cols:
+                scalers[type_name] = _scale_group(cols, train_data, val_data, test_data, shared=True)
+
+    print(f"  Scaling mode: {scaling_mode}")
     return train_data, val_data, test_data, train_mask, val_mask, test_mask, scalers
 
 
@@ -482,12 +520,13 @@ def define_configuration(synthetic_data):
 
 
 
-def main(synthetic_data=False, resampling_freq='W', val_split=None, test_val_size=0.2, legacy_scaling=False):
+def main(synthetic_data=False, resampling_freq='W', val_split=None, test_val_size=0.2, legacy_scaling=False, scaling_mode='legacy'):
     config = define_configuration(synthetic_data)
     config['resampling_freq'] = resampling_freq  # override from train_config
     config['val_split'] = val_split
     config['test_val_size'] = test_val_size
     config['legacy_scaling'] = legacy_scaling
+    config['scaling_mode'] = scaling_mode if not legacy_scaling else 'legacy'
 
     base_data_path = PREPROCESSED_DIR
     data_path = INPUT_DIR

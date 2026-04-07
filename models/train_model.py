@@ -570,8 +570,9 @@ def main(run_all=True):
             tag_parts.append(f"n_piezo={config['n_piezo_connected']}")
         if config.get('n_pumps_connected', 4) != base_config.get('n_pumps_connected', 4):
             tag_parts.append(f"n_pumps={config['n_pumps_connected']}")
-        if config.get('legacy_scaling'):
-            tag_parts.append('legacy_scaling')
+        _sm = config.get('scaling_mode', 'legacy')
+        if _sm != 'legacy':
+            tag_parts.append(f'scaling={_sm}')
         tag = ' | '.join(tag_parts)
         print(f"\n{'='*60}")
         print(f"  Run {i}/{total_runs}: {tag}  (seed={config.get('seed')}, F_w={config.get('F_w')})")
@@ -1012,6 +1013,9 @@ def run_training_and_evaluation(config):
             gt_label += '_oneway_exo'
         if config.get('legacy_scaling'):
             gt_label += '_legacy_scaling'
+        _sm = config.get('scaling_mode', '')
+        if _sm and _sm not in ('legacy', ''):
+            gt_label += f'_{_sm}_scaling'
         run_dir = OUTPUTS_DIR / seed_folder / gt_label / model_base
     elif config.get('multi_support'):
         run_dir = OUTPUTS_DIR / "multi_support" / model_base
@@ -1053,6 +1057,7 @@ def run_training_and_evaluation(config):
         val_split=config.get('val_split', None),
         test_val_size=config.get('test_val_size', 0.2),
         legacy_scaling=config.get('legacy_scaling', False),
+        scaling_mode=config.get('scaling_mode', 'legacy'),
     )
     RANDOM_FOREST_TRAINING_DATA.parent.mkdir(parents=True, exist_ok=True)
     train_data.to_csv(RANDOM_FOREST_TRAINING_DATA)
