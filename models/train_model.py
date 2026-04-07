@@ -1046,7 +1046,7 @@ def run_training_and_evaluation(config):
             name=f"{gt_label_for_name}_s{config.get('seed', 0)}",
             config=wandb_config,
             tags=[config['graph_type'], f"seed_{config.get('seed', 0)}"],
-            reinit=True,
+            reinit="finish_previous",
         )
 
     # Assuming process_data.main() prepares and returns the necessary datasets and GNN data
