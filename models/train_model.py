@@ -1010,6 +1010,8 @@ def run_training_and_evaluation(config):
             gt_label += '_deriv'
         if config.get('one_way_exo'):
             gt_label += '_oneway_exo'
+        if config.get('legacy_scaling'):
+            gt_label += '_legacy_scaling'
         run_dir = OUTPUTS_DIR / seed_folder / gt_label / model_base
     elif config.get('multi_support'):
         run_dir = OUTPUTS_DIR / "multi_support" / model_base
