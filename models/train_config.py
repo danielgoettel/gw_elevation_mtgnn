@@ -123,6 +123,7 @@ def define_base_configuration():
 _DROP_NODE = ['B39F0739-003']
 _SEEDS = [42, 123, 256, 512, 777, 1024, 2048, 3141]
 _5R_TAG = 'seed_experiment/5_rivers'
+_REVISED_HOP_TAG = 'seed_experiment/revised_hop'
 
 _DO_TAG = 'seed_experiment/5_rivers'  # same output folder, dropout suffix in filename
 
@@ -360,8 +361,26 @@ def _build_grid_configs():
                 **fam_cfg,
                 'one_way_exo': True,
                 'seed': s,
-                'seed_experiment_name': _5R_TAG,
+                'seed_experiment_name': _REVISED_HOP_TAG,
             })
+
+    # ══════════════════════════════════════════════════════════════════
+    # Prebuilt adjacency: default + exo_2km_depth75 rule
+    # River/pump edges only for piezos within 2 km AND screen > -75 m NAP
+    # 3 seeds, weekly
+    # ══════════════════════════════════════════════════════════════════
+    from config import GENERATED_GRAPHS
+    _PREBUILT_ADJ = str(Path(GENERATED_GRAPHS) /
+                        'adj_default_WM_fixed_piezo_3_pumps_1_exo_2km_depth75.npy')
+    for s in [42, 123, 256]:
+        configs.append({
+            'graph_type': 'prebuilt',
+            'sp_config': {'prebuilt_path': _PREBUILT_ADJ},
+            'n_pumps_connected': 1,
+            'node_dropout': False,
+            'seed': s,
+            'seed_experiment_name': _REVISED_HOP_TAG,
+        })
 
     return configs
 
