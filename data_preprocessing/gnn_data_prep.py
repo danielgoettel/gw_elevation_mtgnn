@@ -1661,7 +1661,7 @@ def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, perce
         for i, pname in enumerate(df_piezo_columns):
             if pname not in piezo_meta.index:
                 continue
-            px, py = piezo_meta.loc[pname, 'x_coord'], piezo_meta.loc[pname, 'y_coord']
+            px, py = piezo_meta.loc[pname, 'x'], piezo_meta.loc[pname, 'y']
             top_f = piezo_meta.loc[pname, 'top_filter'] / 100   # cm → m NAP
             bot_f = piezo_meta.loc[pname, 'bottom_filter'] / 100
             screen_mid = (top_f + bot_f) / 2
