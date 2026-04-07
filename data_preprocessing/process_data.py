@@ -215,17 +215,18 @@ def load_column_names(base_data_path, data_type_suffix=''):
         return None
 
 
-def fix_datum_shifts(df):
+def fix_known_data_issues(df):
     """
-    Detect and correct piezometers with sustained datum shifts.
+    Fix known data quality issues in specific piezometers.
 
-    Identifies periods where a piezometer's values are implausibly far from
-    the rest of its record (e.g. wrong reference datum), then shifts the bad
-    period to connect seamlessly with the good period, preserving relative
-    day-to-day changes.
+    1. B39F0739-003: datum shift — early period reads ~-889 cm NAP,
+       should be ~616. Shift early period up to connect with good data.
+    2. B40A0400-001: two bad points on 2019-12-18/19 drop to ~454 cm.
+       Replace with NaN for interpolation.
+    3. B40A0534-001: step change on 2010-02-04 — early period offset.
+       Shift pre-2010-02-04 data up to connect with later period.
     """
-    # B39F0739-003: early period reads ~-889 cm NAP, should be ~616
-    # Caused by incorrect datum reference corrected on 2005-04-14
+    # ── B39F0739-003: datum shift ──
     col = 'B39F0739-003'
     if col in df.columns:
         ts = df[col]
@@ -239,7 +240,32 @@ def fix_datum_shifts(df):
                 bad_mask = df.index <= last_bad_idx
                 df.loc[bad_mask, col] = ts[bad_mask] + offset
                 print(f"  Datum shift fix: {col} — shifted {bad_mask.sum()} "
-                      f"early values by +{offset:.0f} cm")
+                      f"values by +{offset:.0f} cm")
+
+    # ── B40A0400-001: two bad points 2019-12-18 and 2019-12-19 ──
+    col = 'B40A0400-001'
+    if col in df.columns:
+        bad_dates = pd.to_datetime(['2019-12-18', '2019-12-19'])
+        mask = df.index.isin(bad_dates)
+        if mask.any():
+            df.loc[mask, col] = np.nan
+            print(f"  Spike removal: {col} — removed {mask.sum()} bad points (2019-12-18/19)")
+
+    # ── B40A0534-001: step change on 2010-02-04 ──
+    col = 'B40A0534-001'
+    if col in df.columns:
+        ts = df[col]
+        split_date = pd.Timestamp('2010-02-04')
+        if split_date in ts.index:
+            before_mask = df.index < split_date
+            # Last value before jump and first value at/after jump
+            last_before = ts[before_mask].iloc[-1]
+            first_after = ts.loc[split_date]
+            offset = first_after - last_before
+            df.loc[before_mask, col] = ts[before_mask] + offset
+            print(f"  Datum shift fix: {col} — shifted {before_mask.sum()} "
+                  f"values by +{offset:.0f} cm")
+
     return df
 
 
@@ -250,7 +276,7 @@ def fill_and_select_data(df, n_nodes_selection=200):
 
     df =  select_nodes(df, n_nodes_selection)
 
-    df = fix_datum_shifts(df)
+    df = fix_known_data_issues(df)
 
     missing_data_mask = ~df.isna()
 
