@@ -211,10 +211,6 @@ _BEST_PER_FAMILY = {
         },
         'n_pumps_connected': 4, 'node_dropout': False,
     },
-    'mixed': {
-        'graph_type': 'mixed',
-        'n_pumps_connected': 1, 'node_dropout': False,
-    },
     'adaptive': {
         'graph_type': 'default',
         'build_adj': True, 'gcn_true': True,
@@ -317,19 +313,17 @@ def _build_grid_configs():
     _SEED = 42
 
     # ══════════════════════════════════════════════════════════════════
-    # v3 Baseline: all 8 graph families × 1 seed, weekly
-    # Bug fixes: pump ordering, precip/evap connectivity, per-type scaling
+    # v3 Baseline: adaptive only (others completed)
     # ══════════════════════════════════════════════════════════════════
-    for fam_key, fam_cfg in _BEST_PER_FAMILY.items():
-        configs.append({
-            **fam_cfg,
-            'seed': _SEED,
-            'seed_experiment_name': _OUTPUT_TAG,
-        })
+    configs.append({
+        **_BEST_PER_FAMILY['adaptive'],
+        'seed': _SEED,
+        'seed_experiment_name': _OUTPUT_TAG,
+    })
 
     # ══════════════════════════════════════════════════════════════════
     # One-way exogenous: exo → piezo only (no signal relay through exo)
-    # All 8 graph families × 1 seed, weekly
+    # All 7 graph families × 1 seed, weekly
     # ══════════════════════════════════════════════════════════════════
     for fam_key, fam_cfg in _BEST_PER_FAMILY.items():
         configs.append({
