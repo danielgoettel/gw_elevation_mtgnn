@@ -25,7 +25,7 @@ from config import (
 def euclidean_distance(x1, y1, x2, y2):
     return np.sqrt((x2 - x1)**2 + (y2 - y1)**2)
 
-def get_n_closest_pumps_indices(n, num_piezo, pump_distances_file=PUMP_DISTANCES):
+def get_n_closest_pumps_indices(n, num_piezo, pump_distances_file=PUMP_DISTANCES, pump_columns=None):
     """
     Reads a CSV of piezometer-to-pump distances and returns, for each piezometer,
     the integer column indices of the n closest pumps, offset by num_piezo so they
@@ -38,7 +38,10 @@ def get_n_closest_pumps_indices(n, num_piezo, pump_distances_file=PUMP_DISTANCES
     num_piezo : int
         Number of piezometers (used as offset for pump node indices).
     pump_distances_file : str
-        Path to a CSV file (no index column) of shape (num_piezometers, num_pumps).
+        Path to a CSV file with header and index column of shape (num_piezometers, num_pumps).
+    pump_columns : list of str, optional
+        Pump column names in adjacency-matrix order. If provided, the distance
+        CSV columns are reordered to match before computing closest pumps.
 
     Returns
     -------
@@ -46,8 +49,18 @@ def get_n_closest_pumps_indices(n, num_piezo, pump_distances_file=PUMP_DISTANCES
         Array of shape (num_piezometers, n) where row i contains the adjacency-matrix
         indices of the n closest pumps to piezometer i.
     """
-    # load raw distances; shape = (num_piezometers, num_pumps)
-    dist_array = pd.read_csv(pump_distances_file, header=None).values
+    # load distances with header and index
+    dist_df = pd.read_csv(pump_distances_file, header=0, index_col=0)
+
+    # reorder columns to match adjacency pump ordering (from pump_metadata.csv)
+    if pump_columns is not None:
+        dist_df = dist_df[pump_columns]
+    else:
+        pump_meta = pd.read_csv(PUMP_METADATA)
+        pump_order = pump_meta['Naam'].tolist()
+        dist_df = dist_df[pump_order]
+
+    dist_array = dist_df.values
 
     # argsort each row to get pump indices in ascending distance order
     sorted_pump_indices = np.argsort(dist_array, axis=1)
