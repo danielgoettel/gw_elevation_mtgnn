@@ -62,7 +62,8 @@ def _create_mtgnn(num_features, num_nodes, seq_length, **kwargs):
         'dropout', 'subgraph_size', 'node_dim', 'dilation_exponential',
         'conv_channels', 'residual_channels', 'skip_channels', 'end_channels',
         'in_dim', 'out_dim', 'layers', 'propalpha', 'tanhalpha',
-        'layer_norm_affline', 'xd', 'multi_support'
+        'layer_norm_affline', 'xd', 'multi_support',
+        'one_way_exo', 'num_piezo'
     }}
     mtgnn_params['num_nodes'] = num_nodes
     mtgnn_params['seq_length'] = seq_length + 1
@@ -1261,6 +1262,9 @@ def run_training_and_evaluation(config):
     else:
         supports = None
 
+
+    # Pass num_piezo to model for one_way_exo mask
+    config['num_piezo'] = num_piezo
 
     model = create_model(
         num_features=num_features,

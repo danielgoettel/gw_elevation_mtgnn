@@ -522,6 +522,8 @@ class MTGNN(nn.Module):
         layer_norm_affline: bool,
         xd: Optional[int] = None,
         multi_support: bool = False,
+        one_way_exo: bool = False,
+        num_piezo: int = 0,
     ):
         super(MTGNN, self).__init__()
 
@@ -533,6 +535,16 @@ class MTGNN(nn.Module):
         self._seq_length = seq_length
         self._layers = layers
         self._idx = torch.arange(self._num_nodes)
+
+        # One-way exo mask: allows exo→piezo but blocks piezo→exo and exo→exo
+        self._one_way_exo = one_way_exo
+        if one_way_exo and num_piezo > 0:
+            mask = torch.ones(num_nodes, num_nodes)
+            mask[num_piezo:, :num_piezo] = 0  # block exo←piezo
+            mask[num_piezo:, num_piezo:] = 0  # block exo←exo
+            self.register_buffer('_exo_mask', mask)
+        else:
+            self.register_buffer('_exo_mask', None)
 
         self._mtgnn_layers = nn.ModuleList()
 
@@ -714,6 +726,10 @@ class MTGNN(nn.Module):
             else:
                 # Only static
                 supports = [A_tilde]
+
+            # Apply one-way exo mask to all supports
+            if self._one_way_exo and self._exo_mask is not None:
+                supports = [s * self._exo_mask for s in supports]
         else:
             supports = None
 
