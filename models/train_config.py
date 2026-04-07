@@ -342,9 +342,22 @@ def _build_grid_configs():
                 'seed_experiment_name': _5R_TAG,
             })
 
-    from config import GENERATED_GRAPHS
-    _PREBUILT_ADJ = str(Path(GENERATED_GRAPHS) /
-                        'adj_default_WM_fixed_piezo_3_pumps_1_exo_2km_depth75.npy')
+    # ══════════════════════════════════════════════════════════════════
+    # Pump connectivity ablation: default & geolayer × n_pumps 1-4 × 3 seeds
+    # (n_pumps=1 for default and n_pumps=3 for geolayer already in baseline,
+    #  but included here for completeness in a single comparison)
+    # ══════════════════════════════════════════════════════════════════
+    for gt in ['default', 'geolayer']:
+        for n_pumps in [1, 2, 3, 4]:
+            for s in _BASELINE_SEEDS:
+                configs.append({
+                    'graph_type': gt,
+                    'n_pumps_connected': n_pumps,
+                    'node_dropout': False,
+                    'seed': s,
+                    'seed_experiment_name': _5R_TAG,
+                })
+
     return configs
 
 explicit_configs = _build_grid_configs()
