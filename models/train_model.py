@@ -1042,7 +1042,7 @@ def run_training_and_evaluation(config):
         wandb_config['model_base'] = model_base
         gt_label_for_name = run_dir.parent.name if run_dir.parent.name != 'seed_experiment' else config['graph_type']
         wandb.init(
-            project="groundwater-flow-gnn",
+            project="groundwater-flow-gnn-v3",
             name=f"{gt_label_for_name}_s{config.get('seed', 0)}",
             config=wandb_config,
             tags=[config['graph_type'], f"seed_{config.get('seed', 0)}"],
