@@ -256,21 +256,33 @@ def fix_known_data_issues(df):
                   f"values ({bad_start.date()} to {bad_end.date()})")
 
     # ── B40A0534-001: sensor drift 2009-10-05 to 2010-02-03 ──
-    # Drops ~115 cm over a week then stays low for 4 months before snapping back.
-    # Shift the bad period up to connect with the last good value.
+    # 10/05-10/12 is linear interpolation from original preprocessing (sensor gap).
+    # 10/13 onward is real but offset data (~523 vs normal ~635).
+    # Snaps back to normal on 2010-02-04.
+    # Fix: NaN the interpolated ramp, shift real offset data up to connect.
     col = 'B40A0534-001'
     if col in df.columns:
         ts = df[col]
-        bad_start = pd.Timestamp('2009-10-05')
-        bad_end = pd.Timestamp('2010-02-03')
-        if bad_start in ts.index and bad_end in ts.index:
-            last_good = ts.loc[:bad_start - pd.Timedelta(days=1)].iloc[-1]
-            first_bad = ts.loc[bad_start]
-            offset = last_good - first_bad
-            bad_mask = (df.index >= bad_start) & (df.index <= bad_end)
-            df.loc[bad_mask, col] = ts[bad_mask] + offset
-            print(f"  Sensor drift fix: {col} — shifted {bad_mask.sum()} "
-                  f"values ({bad_start.date()} to {bad_end.date()}) by +{offset:.0f} cm")
+        interp_start = pd.Timestamp('2009-10-05')
+        interp_end = pd.Timestamp('2009-10-12')
+        drift_start = pd.Timestamp('2009-10-13')
+        drift_end = pd.Timestamp('2010-02-03')
+        last_good_date = pd.Timestamp('2009-10-04')
+
+        if last_good_date in ts.index and drift_start in ts.index:
+            # NaN the interpolated ramp
+            interp_mask = (df.index >= interp_start) & (df.index <= interp_end)
+            df.loc[interp_mask, col] = np.nan
+            n_interp = interp_mask.sum()
+
+            # Shift the offset period up to connect
+            last_good = ts.loc[last_good_date]
+            first_real = ts.loc[drift_start]
+            offset = last_good - first_real
+            drift_mask = (df.index >= drift_start) & (df.index <= drift_end)
+            df.loc[drift_mask, col] = ts[drift_mask] + offset
+            print(f"  Sensor drift fix: {col} — removed {n_interp} interpolated days, "
+                  f"shifted {drift_mask.sum()} values by +{offset:.0f} cm")
 
     return df
 
