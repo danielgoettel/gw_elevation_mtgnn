@@ -1201,6 +1201,38 @@ def run_training_and_evaluation(config):
         A_tilde, static_features = gnn_data_prep.main(df_piezo_columns, pump_columns, locations_no_missing, config['graph_type'], config['percentage'] , config['n_piezo_connected'], config['feature_importance_multiplier'], config['n_pumps_connected'], config['weight_mode'], config['layer_constrain'], directed_graph=config.get('directed_graph', False), mean_gw_elevation=mean_gw_elevation, rf_weight_min=config.get('rf_weight_min', 0.08), rf_weight_max=config.get('rf_weight_max', 0.2), rf_vim_min=config.get('rf_vim_min', 0.01), rf_min_connections=config.get('rf_min_connections', 3), sp_config=config.get('sp_config'), fd_config=config.get('fd_config'), rf_config=config.get('rf_config'), exo_ablation=config.get('exo_ablation'), log_pump_config=config.get('log_pump_config'),
             one_way_exo=config.get('one_way_exo', False))
 
+    # ── Multihop diagnostic: show min/avg/max piezo connections per hop across all nodes ──
+    _adj_np = A_tilde.numpy() if hasattr(A_tilde, 'numpy') else np.array(A_tilde)
+    from collections import deque
+
+    _hop_piezo_counts = {h: [] for h in range(1, 5)}
+    _hop_total_counts = {h: [] for h in range(1, 5)}
+    for _start in range(num_piezo):
+        _visited = {_start: 0}
+        _queue = deque([_start])
+        while _queue:
+            _cur = _queue.popleft()
+            if _visited[_cur] >= 4:
+                continue
+            for _nb in np.where(_adj_np[_cur] > 0)[0]:
+                if _nb not in _visited:
+                    _visited[_nb] = _visited[_cur] + 1
+                    _queue.append(_nb)
+        for _h in range(1, 5):
+            _at_hop = [n for n, d in _visited.items() if d == _h]
+            _hop_piezo_counts[_h].append(sum(1 for n in _at_hop if n < num_piezo))
+            _hop_total_counts[_h].append(len(_at_hop))
+
+    print(f"\n  Multihop structure (across all {num_piezo} piezometers):")
+    print(f"  {'Hop':<6} {'Min Piezo':<11} {'Avg Piezo':<11} {'Max Piezo':<11} {'Avg Total':<11}")
+    for _h in range(1, 5):
+        _p = _hop_piezo_counts[_h]
+        _t = _hop_total_counts[_h]
+        print(f"  {_h:<6} {min(_p):<11} {np.mean(_p):<11.1f} {max(_p):<11} {np.mean(_t):<11.1f}")
+    _cum = [sum(np.mean(_hop_piezo_counts[h]) for h in range(1, hop+1)) for hop in range(1, 5)]
+    print(f"  Cumulative avg piezo reach: hop1={_cum[0]:.0f}, hop2={_cum[1]:.0f}, hop3={_cum[2]:.0f}, hop4={_cum[3]:.0f}")
+    print()
+
     # ── Slice adjacency & static features to match reduced data columns ──
     if _exo_drop_cols:
         # A_tilde is (N_full, N_full), static_features is (N_full, F).

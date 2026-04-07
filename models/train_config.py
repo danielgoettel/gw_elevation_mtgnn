@@ -313,16 +313,57 @@ def _build_grid_configs():
     _SEED = 42
 
     # ══════════════════════════════════════════════════════════════════
-    # Legacy scaling comparison: per-column MinMaxScaler (v2 behavior)
-    # Default graph × 1 seed — run FIRST to check if scaling is the issue
+    # All runs with legacy (per-column) scaling
     # ══════════════════════════════════════════════════════════════════
 
-    # ══════════════════════════════════════════════════════════════════
-    # Legacy scaling comparison: per-column MinMaxScaler (v2 behavior)
-    # Default graph × 1 seed
-    # ══════════════════════════════════════════════════════════════════
+    # Baseline: all graph families (default already completed)
+    for fam_key, fam_cfg in _BEST_PER_FAMILY.items():
+        if fam_key == 'default':
+            continue
+        configs.append({
+            **fam_cfg,
+            'legacy_scaling': True,
+            'seed': _SEED,
+            'seed_experiment_name': _OUTPUT_TAG,
+        })
+
+    # One-way exogenous: all graph families
+    for fam_key, fam_cfg in _BEST_PER_FAMILY.items():
+        configs.append({
+            **fam_cfg,
+            'legacy_scaling': True,
+            'one_way_exo': True,
+            'seed': _SEED,
+            'seed_experiment_name': _OUTPUT_TAG,
+        })
+
+    # Pump connectivity ablation: default & geolayer × n_pumps 1-4
+    for gt in ['default', 'geolayer']:
+        for n_pumps in [1, 2, 3, 4]:
+            configs.append({
+                'graph_type': gt,
+                'n_pumps_connected': n_pumps,
+                'node_dropout': False,
+                'legacy_scaling': True,
+                'seed': _SEED,
+                'seed_experiment_name': _OUTPUT_TAG,
+            })
+
+    # Piezo connectivity ablation: default & geolayer × n_piezo 4,5,6
+    for gt in ['default', 'geolayer']:
+        for n_piezo in [4, 5, 6]:
+            configs.append({
+                'graph_type': gt,
+                'n_piezo_connected': n_piezo,
+                'node_dropout': False,
+                'legacy_scaling': True,
+                'seed': _SEED,
+                'seed_experiment_name': _OUTPUT_TAG,
+            })
+
+    # Adaptive
     configs.append({
-        **_BEST_PER_FAMILY['default'],
+        **_BEST_PER_FAMILY['adaptive'],
         'legacy_scaling': True,
         'seed': _SEED,
         'seed_experiment_name': _OUTPUT_TAG,
