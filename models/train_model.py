@@ -33,7 +33,8 @@ import random
 
 try:
     import wandb
-    wandb.setup({"silent": True})
+    import os
+    os.environ["WANDB_SILENT"] = "true"
     WANDB_AVAILABLE = True
 except ImportError:
     WANDB_AVAILABLE = False
