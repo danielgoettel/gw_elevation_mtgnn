@@ -215,13 +215,43 @@ def load_column_names(base_data_path, data_type_suffix=''):
         return None
 
 
+def fix_datum_shifts(df):
+    """
+    Detect and correct piezometers with sustained datum shifts.
+
+    Identifies periods where a piezometer's values are implausibly far from
+    the rest of its record (e.g. wrong reference datum), then shifts the bad
+    period to connect seamlessly with the good period, preserving relative
+    day-to-day changes.
+    """
+    # B39F0739-003: early period reads ~-889 cm NAP, should be ~616
+    # Caused by incorrect datum reference corrected on 2005-04-14
+    col = 'B39F0739-003'
+    if col in df.columns:
+        ts = df[col]
+        neg_vals = ts[ts < 0]
+        if len(neg_vals) > 0:
+            last_bad_idx = neg_vals.index[-1]
+            remaining = ts[ts.index > last_bad_idx]
+            if len(remaining) > 0:
+                first_good_idx = remaining.index[0]
+                offset = ts[first_good_idx] - ts[last_bad_idx]
+                bad_mask = df.index <= last_bad_idx
+                df.loc[bad_mask, col] = ts[bad_mask] + offset
+                print(f"  Datum shift fix: {col} — shifted {bad_mask.sum()} "
+                      f"early values by +{offset:.0f} cm")
+    return df
+
+
 def fill_and_select_data(df, n_nodes_selection=200):
     """
     Fill missing data and select nodes based on selection criteria.
     """
-    
+
     df =  select_nodes(df, n_nodes_selection)
-    
+
+    df = fix_datum_shifts(df)
+
     missing_data_mask = ~df.isna()
 
     df = df.interpolate(method='linear', order=3).bfill(limit=None)
