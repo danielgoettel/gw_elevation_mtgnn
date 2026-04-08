@@ -1684,14 +1684,23 @@ def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, perce
                     removed_dist += 1
 
             # Distance filter: disconnect rivers beyond max_dist
-            # Use the river node coordinates from the adjacency construction
-            for j in range(num_river):
-                r_idx = river_start + j
-                rx, ry = all_x[r_idx], all_y[r_idx]
-                dist = np.sqrt((px - rx)**2 + (py - ry)**2)
-                if dist > max_dist and adj_matrix[i, r_idx] > 0:
-                    adj_matrix[i, r_idx] = 0
-                    removed_dist += 1
+            # Uses pre-computed distance to actual river geometry (Waal/Nederrijn)
+            river_dist_file = PREPROCESSED_DIR / 'piezo_river_distances.csv'
+            if not hasattr(main, '_river_dists'):
+                if river_dist_file.exists():
+                    _rd = pd.read_csv(river_dist_file).set_index('name')
+                    main._river_dists = _rd['dist_to_river_m']
+                else:
+                    main._river_dists = None
+                    print(f"  WARNING: {river_dist_file} not found, skipping river distance filter")
+
+            if main._river_dists is not None and pname in main._river_dists.index:
+                river_dist = main._river_dists[pname]
+                if river_dist > max_dist:
+                    for j in range(num_river):
+                        if adj_matrix[i, river_start + j] > 0:
+                            adj_matrix[i, river_start + j] = 0
+                            removed_dist += 1
 
         after_nnz = np.count_nonzero(adj_matrix)
         print(f"  Exo distance limit: removed {removed_dist} by distance (>{max_dist}m), "
