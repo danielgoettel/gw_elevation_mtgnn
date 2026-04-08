@@ -1017,6 +1017,8 @@ def run_training_and_evaluation(config):
             gt_label += '_oneway_exo'
         if config.get('legacy_scaling'):
             gt_label += '_legacy_scaling'
+        if config.get('propalpha', 0.07) != 0.07:
+            gt_label += f'_alpha{config["propalpha"]}'
         if config.get('gcn_depth', 4) != 4:
             gt_label += f'_gcnd{config["gcn_depth"]}'
         if config.get('layers', 4) != 4:

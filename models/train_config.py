@@ -313,13 +313,39 @@ def _build_grid_configs():
     _SEED = 42
 
     # ══════════════════════════════════════════════════════════════════
-    # RF without node dropout
+    # propalpha=0.02: stronger neighbor influence in MixProp
+    # default and rf, one-way exo, legacy scaling
+    # ══════════════════════════════════════════════════════════════════
+    for fam_key in ['default', 'rf']:
+        configs.append({
+            **_BEST_PER_FAMILY[fam_key],
+            'propalpha': 0.02,
+            'legacy_scaling': True,
+            'one_way_exo': True,
+            'seed': _SEED,
+            'seed_experiment_name': _OUTPUT_TAG,
+        })
+
+    # ══════════════════════════════════════════════════════════════════
+    # RF with exo distance limit + one-way exo
+    # ══════════════════════════════════════════════════════════════════
+    _EXO_DIST = {'max_distance': 2000, 'min_screen_depth': -75}
+    configs.append({
+        **_BEST_PER_FAMILY['rf'],
+        'legacy_scaling': True,
+        'one_way_exo': True,
+        'exo_distance_limit': _EXO_DIST,
+        'seed': _SEED,
+        'seed_experiment_name': _OUTPUT_TAG,
+    })
+
+    # ══════════════════════════════════════════════════════════════════
+    # RF without one-way exo (two-way, for comparison)
     # ══════════════════════════════════════════════════════════════════
     configs.append({
         **_BEST_PER_FAMILY['rf'],
-        'node_dropout': False,
         'legacy_scaling': True,
-        'one_way_exo': True,
+        'one_way_exo': False,
         'seed': _SEED,
         'seed_experiment_name': _OUTPUT_TAG,
     })
