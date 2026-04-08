@@ -380,8 +380,7 @@ def train(model, optimizer, loss_function, device, num_epochs, train_data, val_d
                         "lr": optimizer.param_groups[0]['lr'],
                     })
 
-                # Print losses every 10 epochs
-                if epoch % 10 == 9:
+                if (epoch + 1) in (10, 50) or (epoch + 1) % 50 == 0:
                     print(f"Epoch {epoch + 1}, Train Loss: {train_loss:.2e}, Eval Loss: {eval_loss:.2e}")
         
                 # Dynamic node dropout — evaluate and mask periodically after warmup
