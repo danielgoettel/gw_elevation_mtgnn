@@ -1707,6 +1707,19 @@ def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, perce
               f"{removed_depth} by depth (<{min_screen}m NAP) "
               f"({before_nnz} → {after_nnz} non-zero)")
 
+        # Summary table
+        n_with_pump = sum(1 for i in range(num_piezo) if np.any(adj_matrix[i, pump_start:pump_end] > 0))
+        n_with_river = sum(1 for i in range(num_piezo) if np.any(adj_matrix[i, river_start:] > 0))
+        n_with_neither = sum(1 for i in range(num_piezo)
+                             if not np.any(adj_matrix[i, pump_start:pump_end] > 0)
+                             and not np.any(adj_matrix[i, river_start:] > 0))
+        avg_pump = np.mean([np.count_nonzero(adj_matrix[i, pump_start:pump_end]) for i in range(num_piezo)])
+        avg_river = np.mean([np.count_nonzero(adj_matrix[i, river_start:]) for i in range(num_piezo)])
+        print(f"  Exo connections summary:")
+        print(f"    Piezos with pump edges:   {n_with_pump:>4}/{num_piezo}  (avg {avg_pump:.1f} pumps/piezo)")
+        print(f"    Piezos with river edges:  {n_with_river:>4}/{num_piezo}  (avg {avg_river:.1f} rivers/piezo)")
+        print(f"    Piezos with neither:      {n_with_neither:>4}/{num_piezo}")
+
     # Apply directional mask: keep piezo-piezo edges only from higher to lower GW elevation
     if directed_graph and mean_gw_elevation is not None:
         elev_mask = mean_gw_elevation[:, None] >= mean_gw_elevation[None, :]  # (num_piezo, num_piezo)
