@@ -1693,8 +1693,6 @@ def main(df_piezo_columns, pump_columns, locations_no_missing, graph_type, perce
                     adj_matrix[i, r_idx] = 0
                     removed_dist += 1
 
-        # Symmetrize removals
-        adj_matrix = np.maximum(adj_matrix, adj_matrix.T)
         after_nnz = np.count_nonzero(adj_matrix)
         print(f"  Exo distance limit: removed {removed_dist} by distance (>{max_dist}m), "
               f"{removed_depth} by depth (<{min_screen}m NAP) "
