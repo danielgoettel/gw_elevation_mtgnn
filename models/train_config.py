@@ -313,16 +313,16 @@ def _build_grid_configs():
     _SEED = 42
 
     # ══════════════════════════════════════════════════════════════════
-    # Exo distance limit: river/pump only within 2km, screen > -75m NAP
-    # All 7 graph families, legacy scaling + one_way_exo
+    # GCN depth ablation: default graph, gcn_depth=2 × layers=3,4
+    # Reduces effective multi-hop reach from 16 to 6-8 hops
     # ══════════════════════════════════════════════════════════════════
-    _EXO_DIST = {'max_distance': 2000, 'min_screen_depth': -75}
-    for fam_key, fam_cfg in _BEST_PER_FAMILY.items():
+    for n_layers in [3, 4]:
         configs.append({
-            **fam_cfg,
+            **_BEST_PER_FAMILY['default'],
             'legacy_scaling': True,
             'one_way_exo': True,
-            'exo_distance_limit': _EXO_DIST,
+            'gcn_depth': 2,
+            'layers': n_layers,
             'seed': _SEED,
             'seed_experiment_name': _OUTPUT_TAG,
         })

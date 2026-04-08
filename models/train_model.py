@@ -575,6 +575,8 @@ def main(run_all=True):
             tag_parts.append(f'scaling={_sm}')
         if config.get('exo_distance_limit'):
             tag_parts.append('exo_dist_limit')
+        if config.get('gcn_depth', 4) != 4 or config.get('layers', 4) != 4:
+            tag_parts.append(f'gcn_d={config.get("gcn_depth", 4)}_L={config.get("layers", 4)}')
         tag = ' | '.join(tag_parts)
         print(f"\n{'='*60}")
         print(f"  Run {i}/{total_runs}: {tag}  (seed={config.get('seed')}, F_w={config.get('F_w')})")
@@ -1015,6 +1017,10 @@ def run_training_and_evaluation(config):
             gt_label += '_oneway_exo'
         if config.get('legacy_scaling'):
             gt_label += '_legacy_scaling'
+        if config.get('gcn_depth', 4) != 4:
+            gt_label += f'_gcnd{config["gcn_depth"]}'
+        if config.get('layers', 4) != 4:
+            gt_label += f'_L{config["layers"]}'
         _sm = config.get('scaling_mode', '')
         if _sm and _sm not in ('legacy', ''):
             gt_label += f'_{_sm}_scaling'
