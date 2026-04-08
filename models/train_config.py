@@ -316,16 +316,17 @@ def _build_grid_configs():
     # GCN depth ablation: default graph, gcn_depth=2 × layers=3,4
     # Reduces effective multi-hop reach from 16 to 6-8 hops
     # ══════════════════════════════════════════════════════════════════
-    for n_layers in [3, 4]:
-        configs.append({
-            **_BEST_PER_FAMILY['default'],
-            'legacy_scaling': True,
-            'one_way_exo': True,
-            'gcn_depth': 2,
-            'layers': n_layers,
-            'seed': _SEED,
-            'seed_experiment_name': _OUTPUT_TAG,
-        })
+    for fam_key in ['default', 'rf']:
+        for n_layers in [3, 4]:
+            configs.append({
+                **_BEST_PER_FAMILY[fam_key],
+                'legacy_scaling': True,
+                'one_way_exo': True,
+                'gcn_depth': 2,
+                'layers': n_layers,
+                'seed': _SEED,
+                'seed_experiment_name': _OUTPUT_TAG,
+            })
 
     return configs
 
