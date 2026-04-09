@@ -838,13 +838,16 @@ def evaluate_and_output(model, config, test_data, test_mask, df_piezo_columns, n
     test_input_ = inverse_transform_with_shape_adjustment(test_input.numpy(), scaler, num_piezo)
     test_target_ = inverse_transform_with_shape_adjustment(test_target.numpy(), scaler, num_piezo)
 
-    test_rmse = calculate_rmse_per_piezometer(test_predicted_model_, test_target_, num_piezo)
+    # Apply missing data mask: only compute RMSE on real (non-interpolated) observations
+    _, _, _, mask_seq = test_sample
+    mask_np = mask_seq.numpy()  # (100, num_piezo) — True where real data
+    test_rmse = calculate_rmse_per_piezometer(test_predicted_model_, test_target_, num_piezo, mask=mask_np)
     test_rmse_mean, test_rmse_std = print_mean_std(test_rmse, f"Test RMSE (after F_w={fw_step} training)")
 
     save_rmse_values(test_rmse, future_window=fw_step, output_dir=step_dir, **config)
 
     # Plotting
-    _, _, _, mask_seq_test = test_sample
+    mask_seq_test = mask_seq
     start_date_test = test_data.index[0]
     plot_freq = config.get('resampling_freq', 'W')
     if plot_freq is None:

@@ -19,11 +19,17 @@ def calculate_mse_per_piezometer(predicted, target, num_piezometers):
     return mse_values
 
 
-def calculate_rmse_per_piezometer(predicted, target, num_piezometers):
+def calculate_rmse_per_piezometer(predicted, target, num_piezometers, mask=None):
     rmse_values = []
     for i in range(num_piezometers):
-        mse = mean_squared_error(target[:, i], predicted[:, i])
-        rmse = np.sqrt(mse)
+        if mask is not None:
+            m = mask[:, i].astype(bool)
+            if m.sum() == 0:
+                rmse_values.append(float('nan'))
+                continue
+            rmse = np.sqrt(np.mean((predicted[m, i] - target[m, i]) ** 2))
+        else:
+            rmse = np.sqrt(mean_squared_error(target[:, i], predicted[:, i]))
         rmse_values.append(rmse)
     return rmse_values
 
