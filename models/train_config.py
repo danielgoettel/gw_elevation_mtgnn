@@ -313,16 +313,14 @@ def _build_grid_configs():
     _SEED = 42
 
     # ══════════════════════════════════════════════════════════════════
-    # propalpha=0.02: stronger neighbor influence in MixProp
-    # default and rf, one-way exo, legacy scaling
+    # Default re-run after self-loop fix
     # ══════════════════════════════════════════════════════════════════
     configs.append({
         **_BEST_PER_FAMILY['default'],
-        'propalpha': 0.02,
         'legacy_scaling': True,
         'one_way_exo': True,
         'seed': _SEED,
-        'seed_experiment_name': _OUTPUT_TAG,
+        'seed_experiment_name': _OUTPUT_TAG + '/selfloop_fix',
     })
 
     return configs

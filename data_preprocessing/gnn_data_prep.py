@@ -303,11 +303,11 @@ def generate_complex_adjacency_matrix(all_coords, num_piezo, num_pump, num_prec,
         for j in range(num_nodes):
             dist_matrix[i, j] = euclidean_distance(all_coords[i, 0], all_coords[i, 1], all_coords[j, 0], all_coords[j, 1])
 
-    # Always connect each piezometer to the 3 closest piezometers
+    # Always connect each piezometer to the n closest piezometers (excluding itself)
     for i in range(num_piezo):
-            # Connect to the 3 closest piezometers (excluding itself)
-            piezo_indices = np.argsort(dist_matrix[i, :num_piezo])[2:2+n_piezo_connected]  # Skip the first index (itself)
-            adj_matrix[i, piezo_indices] = 0.1
+            sorted_indices = np.argsort(dist_matrix[i, :num_piezo])
+            sorted_indices = sorted_indices[sorted_indices != i]  # exclude self
+            adj_matrix[i, sorted_indices[:n_piezo_connected]] = 0.1
   
     # Determine the indices of nodes to connect to exhogenous variables
     if percentage is not None:
@@ -328,8 +328,9 @@ def generate_complex_adjacency_matrix(all_coords, num_piezo, num_pump, num_prec,
     for i in selected_indices:
         if i < num_piezo:  # For piezometers
             # Connect to the 3 closest piezometers (excluding itself)
-            piezo_indices = np.argsort(dist_matrix[i, :num_piezo])[2:5]  # Skip the first index (itself)
-            adj_matrix[i, piezo_indices] = 0.1
+            sorted_indices = np.argsort(dist_matrix[i, :num_piezo])
+            sorted_indices = sorted_indices[sorted_indices != i]
+            adj_matrix[i, sorted_indices[:3]] = 0.1
 
             pump_indices = closest_pumps[i].tolist()
             for pump_col_idx in pump_indices:
