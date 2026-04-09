@@ -606,7 +606,8 @@ def generate_rf_adjacency_fixed(
             topk_rel = np.argsort(weights)[-n_top_connections:][::-1]
             selected = [candidates[idx] for idx in topk_rel]
         else:
-            row = rf_feature_importance[i]
+            row = rf_feature_importance[i].copy()
+            row[i] = 0  # no self-loops
             selected = np.argsort(row)[-n_top_connections:][::-1].tolist()
         for j in selected:
             adj_matrix[i, j] = 0.1
